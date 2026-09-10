@@ -56,6 +56,13 @@
   }
   .status { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-secondary); white-space: nowrap; position: relative; }
   .status[data-tooltip] { cursor: help; }
+  .status.show-tip::after {
+    content: attr(data-tooltip);
+    position: absolute; bottom: 130%; left: 0;
+    background: #000; color: #fff; padding: 6px 10px; border-radius: 6px;
+    font-size: 12px; white-space: nowrap; z-index: 10;
+    box-shadow: 0 4px 12px rgba(0,0,0,.5);
+  }
   .status[data-tooltip]:hover::after {
     content: attr(data-tooltip);
     position: absolute; bottom: 130%; left: 0;
@@ -125,11 +132,12 @@ const RARITY_COLORS = {
   Legendary: "#fb923c", Mythic: "#f472b6"
 };
 
-const classesList = ["Archmage","Spellblade","Sniper","Assassin","Guardian","Berserker"];
+const classesList = ["Archmage","Spellblade","Sniper","Assassin","Guardian","Berserker","Tools"];
 const weaponsByClass = {
   Archmage: ["Staff"], Spellblade: ["Sword","Shield"], Sniper: ["Bow"],
   Assassin: ["Sword"], Guardian: ["Sword","Shield"], Berserker: ["Sword"]
 };
+const toolCategories = ["Pickaxe","Axe","Pouch","Basket","Trap","Fishing Rod"];
 const armorCats = ["Helmet","Bodyarmor","Gloves","Boots"];
 const universalCats = ["Ring","Amulet"];
 
@@ -171,7 +179,7 @@ function buildCategories() {
   catEl.innerHTML = '';
   if (!selClass) { wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
-  const cats = [...armorCats, ...universalCats, ...weaponsByClass[selClass]];
+  const cats = selClass === 'Tools' ? toolCategories : [...armorCats, ...universalCats, ...weaponsByClass[selClass]];
   cats.forEach(cat => {
     const btn = document.createElement('button');
     btn.className = 'pill small';
@@ -243,9 +251,22 @@ function render() {
       <td><div class="affixlist">${(i.affixes || []).map(a => `<span class="affix">${a}</span>`).join('')}</div></td>
       <td><span class="status" ${statusTitle ? `data-tooltip="${statusTitle}"` : ''}><span class="dot" style="background:${statusColor}"></span>${statusLabel}</span></td>
     `;
+    if (statusTitle) {
+      const statusEl = tr.querySelector('.status');
+      statusEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const wasOpen = statusEl.classList.contains('show-tip');
+        document.querySelectorAll('.status.show-tip').forEach(el => el.classList.remove('show-tip'));
+        if (!wasOpen) statusEl.classList.add('show-tip');
+      });
+    }
     rows.appendChild(tr);
   });
 }
+
+document.addEventListener('click', () => {
+  document.querySelectorAll('.status.show-tip').forEach(el => el.classList.remove('show-tip'));
+});
 
 fetch(ITEMS_URL)
   .then(r => {

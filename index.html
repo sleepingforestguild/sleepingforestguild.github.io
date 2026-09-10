@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SleepingForest Community Chest</title>
+<style>
+  :root {
+    --bg: #0d0f14; --surface: #161922; --border: #2a2e3a;
+    --text: #e8e9ed; --text-secondary: #9a9ea8; --text-muted: #6b6f7a;
+    --accent: #7c8cf8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    margin: 0; padding: 2rem 1rem;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
+  .sub { color: var(--text-secondary); font-size: 13px; margin: 0 0 24px; }
+  .row { display: flex; gap: 8px; margin-bottom: 18px; }
+  input[type=text] {
+    flex: 1; background: var(--surface); border: 1px solid var(--border);
+    color: var(--text); padding: 9px 12px; border-radius: 8px; font-size: 14px;
+  }
+  button.reset {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    padding: 9px 16px; border-radius: 8px; cursor: pointer; font-size: 14px;
+  }
+  button.reset:hover { border-color: var(--accent); }
+  .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; margin: 0 0 8px; }
+  .pillrow { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; }
+  .pill {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    padding: 5px 12px; border-radius: 8px; font-size: 13px; cursor: pointer;
+  }
+  .pill:hover { border-color: var(--accent); }
+  .pill.active { background: rgba(124,140,248,.15); border-color: var(--accent); color: var(--accent); }
+  .pill.small { font-size: 12px; padding: 4px 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    text-align: left; padding: 10px 12px; color: var(--text-muted);
+    border-bottom: 1px solid var(--border); font-weight: 500; font-size: 11px;
+    text-transform: uppercase; letter-spacing: .04em;
+  }
+  tbody td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .tablewrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .itemname { display: flex; align-items: center; gap: 7px; font-weight: 500; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+  .muted { color: var(--text-secondary); }
+  .affix {
+    font-size: 10px; background: var(--bg); padding: 2px 7px; border-radius: 6px;
+    color: var(--text-secondary); margin: 0 4px 4px 0; display: inline-block;
+  }
+  .status { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-secondary); }
+  .empty { text-align: center; padding: 2rem; color: var(--text-muted); font-size: 13px; }
+  .loading { text-align: center; padding: 2rem; color: var(--text-muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>SleepingForest Community Chest</h1>
+  <p class="sub">Browse donated gear. Use /additem in Discord to add your own.</p>
+
+  <div class="row">
+    <input type="text" id="search" placeholder="Search items...">
+    <button class="reset" id="resetBtn">Reset</button>
+  </div>
+
+  <p class="label">Class</p>
+  <div class="pillrow" id="classes"></div>
+
+  <div id="catWrap" style="display:none;">
+    <p class="label">Category</p>
+    <div class="pillrow" id="categories"></div>
+  </div>
+
+  <div id="affixWrap" style="display:none;">
+    <p class="label">Affixes (up to 4)</p>
+    <div class="pillrow" id="affixes"></div>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:24%">Item</th>
+          <th style="width:14%">Category</th>
+          <th style="width:14%">Class</th>
+          <th style="width:13%">Added by</th>
+          <th style="width:24%">Affixes</th>
+          <th style="width:11%">Status</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div id="loading" class="loading">Loading chest...</div>
+    <div id="empty" class="empty" style="display:none;">No items match those filters.</div>
+  </div>
+</div>
+
+<script>
+const ITEMS_URL = "https://raw.githubusercontent.com/darkblisss/sleepingforest-bot/main/items.json";
+
+const RARITY_COLORS = {
+  Uncommon: "#4ade80", Rare: "#60a5fa", Epic: "#c084fc",
+  Legendary: "#fb923c", Mythic: "#f472b6"
+};
+
+const classesList = ["Archmage","Spellblade","Sniper","Assassin","Guardian","Berserker"];
+const weaponsByClass = {
+  Archmage: ["Staff"], Spellblade: ["Sword","Shield"], Sniper: ["Bow"],
+  Assassin: ["Sword"], Guardian: ["Sword","Shield"], Berserker: ["Sword"]
+};
+const armorCats = ["Helmet","Bodyarmor","Gloves","Boots"];
+const universalCats = ["Ring","Amulet"];
+
+const affixPools = {
+  Helmet: ["Max Health","Max Energy","Attack Power","Critical Chance","Critical Damage","Defense Penetration","Resource Efficiency","Damage Reflect","Health on Crit","Energy on Dodge"],
+  Bodyarmor: ["Max Health","Max Energy","Defense","Defense Penetration","Resource Efficiency","Damage Reflect","Dodge","Health on Hit","Health on Dodge","Energy on Hit"],
+  Gloves: ["Attack Power","Attack Speed","Critical Chance","Critical Damage","Defense Penetration","Resource Efficiency","Health on Hit","Health on Crit","Energy on Hit","Energy on Crit"],
+  Boots: ["Max Health","Max Energy","Attack Speed","Defense","Health on Dodge","Health on Crit","Energy on Crit","Energy on Dodge","Dodge","Critical Damage"],
+  Ring: ["Max Health","Max Energy","Attack Power","Defense","Critical Damage","Defense Penetration","Resource Efficiency","Health on Hit","Health on Crit","Energy on Hit","Drop Chance","Gold Find"],
+  Amulet: ["Max Health","Max Energy","Defense","Resource Efficiency","Damage Reflect","Health on Crit","Health on Dodge","Health on Block","Energy on Block","Perfect Block","Combat XP","Pet XP"],
+  Shield: ["Max Health","Max Energy","Attack Power","Defense","Resource Efficiency","Damage Reflect","Block Chance","Perfect Block","Health on Block","Energy on Block"],
+  Sword: ["Attack Power","Attack Speed","Critical Chance","Critical Damage","Defense Penetration","Resource Efficiency","Health on Hit","Health on Crit","Energy on Hit","Energy on Crit"],
+  Staff: ["Attack Power","Attack Speed","Critical Chance","Critical Damage","Defense Penetration","Resource Efficiency","Health on Hit","Health on Crit","Energy on Hit","Energy on Crit"],
+  Bow: ["Attack Power","Attack Speed","Critical Chance","Critical Damage","Defense Penetration","Resource Efficiency","Health on Hit","Health on Crit","Energy on Hit","Energy on Crit"]
+};
+
+let items = [];
+let selClass = null, selCategory = null;
+const selAffixes = new Set();
+
+const classEl = document.getElementById('classes');
+classesList.forEach(c => {
+  const btn = document.createElement('button');
+  btn.className = 'pill';
+  btn.textContent = c;
+  btn.onclick = () => {
+    selClass = selClass === c ? null : c;
+    selCategory = null; selAffixes.clear();
+    [...classEl.children].forEach(b => b.classList.remove('active'));
+    if (selClass) btn.classList.add('active');
+    buildCategories(); buildAffixes(); render();
+  };
+  classEl.appendChild(btn);
+});
+
+function buildCategories() {
+  const wrap = document.getElementById('catWrap');
+  const catEl = document.getElementById('categories');
+  catEl.innerHTML = '';
+  if (!selClass) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  const cats = [...armorCats, ...universalCats, ...weaponsByClass[selClass]];
+  cats.forEach(cat => {
+    const btn = document.createElement('button');
+    btn.className = 'pill small';
+    btn.textContent = cat;
+    btn.onclick = () => {
+      selCategory = selCategory === cat ? null : cat;
+      selAffixes.clear();
+      [...catEl.children].forEach(b => b.classList.remove('active'));
+      if (selCategory) btn.classList.add('active');
+      buildAffixes(); render();
+    };
+    catEl.appendChild(btn);
+  });
+}
+
+function buildAffixes() {
+  const wrap = document.getElementById('affixWrap');
+  const affixEl = document.getElementById('affixes');
+  affixEl.innerHTML = '';
+  if (!selCategory) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  (affixPools[selCategory] || []).forEach(a => {
+    const btn = document.createElement('button');
+    btn.className = 'pill small';
+    btn.textContent = a;
+    btn.onclick = () => {
+      if (selAffixes.has(a)) { selAffixes.delete(a); btn.classList.remove('active'); }
+      else if (selAffixes.size < 4) { selAffixes.add(a); btn.classList.add('active'); }
+      render();
+    };
+    affixEl.appendChild(btn);
+  });
+}
+
+document.getElementById('resetBtn').onclick = () => {
+  selClass = null; selCategory = null; selAffixes.clear();
+  document.getElementById('search').value = '';
+  [...classEl.children].forEach(b => b.classList.remove('active'));
+  buildCategories(); buildAffixes(); render();
+};
+document.getElementById('search').addEventListener('input', render);
+
+function render() {
+  const q = document.getElementById('search').value.toLowerCase();
+  const filtered = items.filter(i =>
+    i.name.toLowerCase().includes(q) &&
+    (!selClass || (i.classes || []).includes(selClass) || (i.classes || []).includes('All')) &&
+    (!selCategory || i.category === selCategory) &&
+    [...selAffixes].every(a => (i.affixes || []).includes(a))
+  );
+  const rows = document.getElementById('rows');
+  rows.innerHTML = '';
+  document.getElementById('empty').style.display = filtered.length ? 'none' : 'block';
+  filtered.forEach(i => {
+    const rarityColor = RARITY_COLORS[i.rarity] || '#9a9ea8';
+    const statusColor = i.status === 'available' ? '#4ade80' : (i.status === 'pending' ? '#fbbf24' : '#f87171');
+    const statusLabel = i.status ? i.status.charAt(0).toUpperCase() + i.status.slice(1) : 'Unknown';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><span class="itemname"><span class="dot" style="background:${rarityColor}"></span>${i.name}</span></td>
+      <td class="muted">${i.category || ''}</td>
+      <td class="muted">${(i.classes || []).join(', ')}</td>
+      <td class="muted">${i.owner_name || ''}</td>
+      <td>${(i.affixes || []).map(a => `<span class="affix">${a}</span>`).join('')}</td>
+      <td><span class="status"><span class="dot" style="background:${statusColor}"></span>${statusLabel}</span></td>
+    `;
+    rows.appendChild(tr);
+  });
+}
+
+fetch(ITEMS_URL)
+  .then(r => {
+    if (!r.ok) throw new Error('items.json not found yet - add your first item with /additem');
+    return r.json();
+  })
+  .then(data => {
+    items = data;
+    document.getElementById('loading').style.display = 'none';
+    render();
+  })
+  .catch(err => {
+    document.getElementById('loading').textContent = err.message;
+  });
+</script>
+</body>
+</html>

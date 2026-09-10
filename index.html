@@ -102,7 +102,7 @@
 </div>
 
 <script>
-const ITEMS_URL = "https://raw.githubusercontent.com/darkblisss/sleepingforest-bot/main/items.json";
+const ITEMS_URL = "https://raw.githubusercontent.com/darkblisss/sleepingforest-bot/main/items.json?cb=" + Date.now();
 
 const RARITY_COLORS = {
   Uncommon: "#4ade80", Rare: "#60a5fa", Epic: "#c084fc",
@@ -211,8 +211,13 @@ function render() {
   document.getElementById('empty').style.display = filtered.length ? 'none' : 'block';
   filtered.forEach(i => {
     const rarityColor = RARITY_COLORS[i.rarity] || '#9a9ea8';
-    const statusColor = i.status === 'available' ? '#4ade80' : (i.status === 'pending' ? '#fbbf24' : '#f87171');
+    const statusColor = i.status === 'available' ? '#4ade80' : '#f87171';
     const statusLabel = i.status ? i.status.charAt(0).toUpperCase() + i.status.slice(1) : 'Unknown';
+    let statusTitle = '';
+    if (i.status === 'rented' && i.borrower_name) {
+      const d = i.borrowed_at ? new Date(i.borrowed_at).toLocaleDateString() : '';
+      statusTitle = `Borrowed by ${i.borrower_name}${d ? ' on ' + d : ''}`;
+    }
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td><span class="itemname"><span class="dot" style="background:${rarityColor}"></span>${i.name}</span></td>
@@ -220,7 +225,7 @@ function render() {
       <td class="muted">${(i.classes || []).join(', ')}</td>
       <td class="muted">${i.owner_name || ''}</td>
       <td><div class="affixlist">${(i.affixes || []).map(a => `<span class="affix">${a}</span>`).join('')}</div></td>
-      <td><span class="status"><span class="dot" style="background:${statusColor}"></span>${statusLabel}</span></td>
+      <td><span class="status" title="${statusTitle}" style="${statusTitle ? 'cursor:help; border-bottom:1px dotted var(--text-muted);' : ''}"><span class="dot" style="background:${statusColor}"></span>${statusLabel}</span></td>
     `;
     rows.appendChild(tr);
   });

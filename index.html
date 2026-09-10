@@ -52,7 +52,6 @@
   tbody td { padding: 14px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; white-space: nowrap; }
   .tablewrap {
     background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
-    overflow-x: auto; overflow-y: visible; -webkit-overflow-scrolling: touch;
   }
   .itemname { display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 15px; white-space: nowrap; }
   .itemname.clickable { cursor: pointer; }
@@ -87,7 +86,6 @@
   }
   .empty { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 15px; }
   .loading { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 15px; }
-  html, body { overflow-x: hidden; }
 
   .topbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
   .authbox { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
@@ -162,6 +160,8 @@
     body { padding: 1.5rem 1rem; }
     h1 { font-size: 24px; }
     .topbar { flex-direction: column; }
+    .tablewrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    thead th { position: static; }
   }
 </style>
 </head>

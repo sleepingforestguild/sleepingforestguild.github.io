@@ -155,21 +155,26 @@ const RARITY_COLORS = {
   Legendary: "#fb923c", Mythic: "#f472b6"
 };
 
-const CLASS_LIST = ["Archmage","Spellblade","Sniper","Assassin","Guardian","Berserker"];
+const ARCHETYPES = {
+  Warrior: ["Guardian","Berserker"],
+  Ranger:  ["Sniper","Assassin"],
+  Mage:    ["Archmage","Spellblade"],
+};
+const ARCHETYPE_LIST = Object.keys(ARCHETYPES);
 
 // Each Type maps to one or more real game "category" values.
-// needsClass: true  -> pick a class first (item's real category depends on class, e.g. mage Bodyarmor = "Robe")
+// needsClass: true  -> pick an archetype first (item's real category depends on it, e.g. mage Bodyarmor = "Robe")
 // needsClass: false -> category is fixed, skip straight to Level/Affixes
 // isTools: true     -> pick one of the 6 tool categories first
 const TYPE_CONFIG = {
   Helmet:    { needsClass: true, categories: ["Helmet","Hat"],
-               classCategory: { Guardian:"Helmet", Berserker:"Helmet", Sniper:"Hat", Assassin:"Hat", Archmage:"Hat", Spellblade:"Hat" } },
+               archetypeCategory: { Warrior:"Helmet", Ranger:"Hat", Mage:"Hat" } },
   Bodyarmor: { needsClass: true, categories: ["Bodyarmor","Robe"],
-               classCategory: { Guardian:"Bodyarmor", Berserker:"Bodyarmor", Sniper:"Bodyarmor", Assassin:"Bodyarmor", Archmage:"Robe", Spellblade:"Robe" } },
+               archetypeCategory: { Warrior:"Bodyarmor", Ranger:"Bodyarmor", Mage:"Robe" } },
   Gloves:    { needsClass: true, categories: ["Gloves"],
-               classCategory: { Guardian:"Gloves", Berserker:"Gloves", Sniper:"Gloves", Assassin:"Gloves", Archmage:"Gloves", Spellblade:"Gloves" } },
+               archetypeCategory: { Warrior:"Gloves", Ranger:"Gloves", Mage:"Gloves" } },
   Boots:     { needsClass: true, categories: ["Boots","Shoes"],
-               classCategory: { Guardian:"Boots", Berserker:"Boots", Sniper:"Boots", Assassin:"Boots", Archmage:"Shoes", Spellblade:"Shoes" } },
+               archetypeCategory: { Warrior:"Boots", Ranger:"Boots", Mage:"Shoes" } },
   Sword:     { needsClass: false, categories: ["Sword"] },
   Shield:    { needsClass: false, categories: ["Shield"] },
   Bow:       { needsClass: false, categories: ["Bow"] },
@@ -214,8 +219,9 @@ function itemMatchesFilters(i) {
   if (cfg.needsClass) {
     if (!cfg.categories.includes(i.category)) return false;
     if (selClass) {
-      if (i.category !== cfg.classCategory[selClass]) return false;
-      if (!(i.classes || []).includes(selClass)) return false;
+      if (i.category !== cfg.archetypeCategory[selClass]) return false;
+      const subclasses = ARCHETYPES[selClass];
+      if (!subclasses.some(c => (i.classes || []).includes(c))) return false;
     }
     return true;
   }
@@ -227,7 +233,7 @@ function resolvedCategory() {
   if (!selType) return null;
   const cfg = TYPE_CONFIG[selType];
   if (cfg.isTools) return selToolCat;
-  if (cfg.needsClass) return selClass ? cfg.classCategory[selClass] : null;
+  if (cfg.needsClass) return selClass ? cfg.archetypeCategory[selClass] : null;
   return cfg.categories[0];
 }
 
@@ -253,7 +259,7 @@ function buildClassWrap() {
   const cfg = selType ? TYPE_CONFIG[selType] : null;
   if (!cfg || !cfg.needsClass) { wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
-  CLASS_LIST.forEach(c => {
+  ARCHETYPE_LIST.forEach(c => {
     const btn = document.createElement('button');
     btn.className = 'pill small';
     btn.textContent = c;

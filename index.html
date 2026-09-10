@@ -42,15 +42,18 @@
   .pill:hover { border-color: var(--accent); }
   .pill.active { background: rgba(124,140,248,.15); border-color: var(--accent); color: var(--accent); }
   .pill.small { font-size: 14px; padding: 6px 14px; }
-  table { width: 100%; border-collapse: collapse; font-size: 15px; table-layout: auto; min-width: 900px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed; }
   thead th {
-    text-align: left; padding: 14px 16px; color: var(--text-muted);
+    text-align: left; padding: 12px 14px; color: var(--text-muted);
     border-bottom: 1px solid var(--border); font-weight: 500; font-size: 12px;
     text-transform: uppercase; letter-spacing: .04em; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
   }
-  tbody td { padding: 14px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tbody td { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
   .tablewrap { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .itemname { display: flex; align-items: center; gap: 9px; font-weight: 500; font-size: 16px; white-space: nowrap; }
+  .itemname { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 500; font-size: 15px; }
+  .itemname.clickable { cursor: pointer; }
+  .itemname.clickable:hover { text-decoration: underline; }
   .newbadge {
     font-size: 10px; font-weight: 600; background: var(--accent); color: #0d0f14;
     padding: 2px 7px; border-radius: 5px; letter-spacing: .03em; text-transform: uppercase;
@@ -61,10 +64,13 @@
     50% { opacity: .6; }
   }
   .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
-  .muted { color: var(--text-secondary); white-space: nowrap; }
-  .affixlist { display: flex; flex-wrap: nowrap; gap: 6px; }
+  .muted {
+    color: var(--text-secondary); white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; display: block;
+  }
+  .affixlist { display: flex; flex-wrap: wrap; gap: 5px; }
   .affix {
-    font-size: 12px; background: var(--bg); padding: 4px 10px; border-radius: 7px;
+    font-size: 11px; background: var(--bg); padding: 3px 8px; border-radius: 6px;
     color: var(--text-secondary); white-space: nowrap; display: inline-block;
   }
   .status { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-secondary); white-space: nowrap; position: relative; }
@@ -73,6 +79,11 @@
     position: fixed; display: none; background: #000; color: #fff; padding: 6px 10px;
     border-radius: 6px; font-size: 12px; white-space: nowrap; z-index: 1000;
     box-shadow: 0 4px 12px rgba(0,0,0,.5); pointer-events: none;
+  }
+  .delete-confirm {
+    position: fixed; display: none; align-items: center; gap: 10px; background: var(--surface);
+    border: 1px solid var(--border); padding: 8px 10px 8px 14px; border-radius: 10px;
+    font-size: 13px; color: var(--text-secondary); z-index: 1000; box-shadow: 0 4px 16px rgba(0,0,0,.5);
   }
   .empty { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 15px; }
   .loading { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 15px; }
@@ -116,6 +127,13 @@
     padding: 11px 14px; border-radius: 9px; font-size: 15px; height: 44px; line-height: 1.4;
     box-sizing: border-box; font-family: inherit;
   }
+  .modal textarea.paste-box {
+    width: 100%; height: 44px; min-height: 44px; max-height: 44px; resize: none; overflow: hidden;
+    background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    padding: 11px 14px; border-radius: 9px; font-size: 15px; line-height: 1.4;
+    box-sizing: border-box; font-family: inherit; white-space: nowrap;
+  }
+  .modal textarea.paste-box::placeholder { color: var(--text-muted); }
   .modal select {
     -webkit-appearance: none; appearance: none;
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%239a9ea8'/></svg>");
@@ -142,11 +160,12 @@
   <div class="topbar">
     <div>
       <h1>SleepingForest Community Chest</h1>
-      <p class="sub">Browse donated gear, or log in with Discord to add and borrow items right here.</p>
+      <p class="sub">Browse donated gear, or log in with Discord to add items right here. Borrow/return still happens in Discord.</p>
     </div>
     <div class="authbox" id="authBox"></div>
   </div>
   <p class="autherror" id="authError" style="display:none;"></p>
+  <p class="autherror" id="linkHint" style="display:none; color: var(--text-muted);"></p>
 
   <div class="row">
     <input type="text" id="search" placeholder="Search items...">
@@ -179,19 +198,21 @@
     </div>
   </div>
 
-  <p class="count" id="itemCount"></p>
+  <div style="display:flex; justify-content:space-between; align-items:baseline;">
+    <p class="count" id="itemCount"></p>
+    <p class="count" id="removeHint" style="display:none;">Click your item's name to remove it.</p>
+  </div>
 
   <div class="tablewrap">
     <table>
       <thead>
         <tr>
-          <th style="width:24%">Item</th>
+          <th style="width:22%">Item</th>
           <th style="width:12%">Category</th>
           <th style="width:12%">Class</th>
-          <th style="width:11%">Added by</th>
-          <th style="width:20%">Affixes</th>
-          <th style="width:10%">Status</th>
-          <th style="width:11%" id="actionsHeader">Actions</th>
+          <th style="width:12%">Added by</th>
+          <th style="width:30%">Affixes</th>
+          <th style="width:12%">Status</th>
         </tr>
       </thead>
       <tbody id="rows"></tbody>
@@ -202,11 +223,18 @@
 </div>
 
 <div class="tooltip-fixed" id="tooltipEl"></div>
+<div class="delete-confirm" id="deleteConfirmEl">
+  <span>Remove this item?</span>
+  <button class="rowbtn danger" id="deleteConfirmBtn">Delete</button>
+</div>
 
 <div class="modalbg" id="addModalBg" style="display:none;">
   <div class="modal">
     <button class="modal-close" id="modalClose">&times;</button>
     <h2>Add an item</h2>
+
+    <label>Paste item stats (optional)</label>
+    <textarea id="modalPasteBox" class="paste-box" rows="1" placeholder="Paste copied item stats here to auto-fill..."></textarea>
 
     <label>Item</label>
     <input type="text" id="modalItemInput" list="modalItemList" placeholder="Start typing an item name...">
@@ -215,8 +243,10 @@
     <label>Rarity</label>
     <select id="modalRarity"></select>
 
-    <label>Affixes</label>
-    <div class="pillrow" id="modalAffixes"></div>
+    <div id="modalAffixWrap" style="display:none;">
+      <label>Affixes</label>
+      <div class="pillrow" id="modalAffixes"></div>
+    </div>
 
     <p class="modal-error" id="modalError"></p>
     <div class="modal-actions">
@@ -463,7 +493,7 @@ function handleAuthRedirect() {
   if (token) { localStorage.setItem('sf_token', token); params.delete('token'); }
   if (authErr) {
     const messages = {
-      not_a_member: "You're not a member of the SleepingForest Discord server.",
+      not_a_member: "You are not a member of Sleeping Forest.",
       missing_code: 'Discord login was cancelled or failed.',
       server_error: 'Something went wrong logging you in - try again.',
     };
@@ -494,11 +524,14 @@ function renderAuthBox() {
   const box = document.getElementById('authBox');
   const mineBtn = document.getElementById('mineBtn');
   const addBtn = document.getElementById('addBtn');
+  const removeHint = document.getElementById('removeHint');
+  const linkHint = document.getElementById('linkHint');
   if (currentUser) {
     const avatarUrl = currentUser.avatar
       ? `https://cdn.discordapp.com/avatars/${currentUser.id}/${currentUser.avatar}.png?size=64`
       : 'https://cdn.discordapp.com/embed/avatars/0.png';
-    box.innerHTML = `<img src="${avatarUrl}" alt=""><span class="uname">${currentUser.username}</span><button class="link-muted" id="logoutBtn">Log out</button>`;
+    const displayName = currentUser.ingame_name || currentUser.username;
+    box.innerHTML = `<img src="${avatarUrl}" alt=""><span class="uname">${displayName}</span><button class="link-muted" id="logoutBtn">Log out</button>`;
     document.getElementById('logoutBtn').onclick = () => {
       localStorage.removeItem('sf_token');
       currentUser = null; mineOnly = false;
@@ -506,12 +539,23 @@ function renderAuthBox() {
       renderAuthBox(); render();
     };
     mineBtn.style.display = 'inline-block';
-    addBtn.style.display = 'inline-block';
+    if (currentUser.linked) {
+      addBtn.style.display = 'inline-block';
+      removeHint.style.display = 'block';
+      linkHint.style.display = 'none';
+    } else {
+      addBtn.style.display = 'none';
+      removeHint.style.display = 'none';
+      linkHint.textContent = 'Run !link <ingame_name> in Discord to add or remove items.';
+      linkHint.style.display = 'block';
+    }
   } else {
     box.innerHTML = `<button class="btn-discord" id="loginBtn">Log in with Discord</button>`;
     document.getElementById('loginBtn').onclick = () => { window.location.href = `${API_BASE}/auth/discord/login`; };
     mineBtn.style.display = 'none';
     addBtn.style.display = 'none';
+    removeHint.style.display = 'none';
+    linkHint.style.display = 'none';
     mineOnly = false;
   }
 }
@@ -558,20 +602,24 @@ async function openAddModal() {
     raritySel.appendChild(opt);
   });
   raritySel.selectedIndex = 0;
+  document.getElementById('modalPasteBox').value = '';
   document.getElementById('modalItemInput').value = '';
   document.getElementById('modalError').style.display = 'none';
   modalSelectedAffixes.clear();
   buildModalAffixes(master);
   document.getElementById('addModalBg').style.display = 'flex';
+  document.getElementById('modalPasteBox').focus();
 }
 
 function buildModalAffixes(master) {
+  const wrap = document.getElementById('modalAffixWrap');
   const affixEl = document.getElementById('modalAffixes');
   affixEl.innerHTML = '';
   const entry = modalItemMap[document.getElementById('modalItemInput').value];
   const rarity = document.getElementById('modalRarity').value;
-  if (!entry) return;
-  const pool = master.affixPools[entry.category] || [];
+  const pool = entry ? (master.affixPools[entry.category] || []) : [];
+  if (!entry || pool.length === 0) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
   const cap = master.rarityAffixCap[rarity] || 4;
   pool.forEach(a => {
     const btn = document.createElement('button');
@@ -586,6 +634,72 @@ function buildModalAffixes(master) {
     affixEl.appendChild(btn);
   });
 }
+
+// Parses text copied straight from the game's item tooltip, e.g.:
+//   Nyxium RingLv.80
+//   Nyxium Ring
+//   Rare Ring - Crafting Lv. 80
+//   ...
+//   Affixes
+//   Energy on Hit
+//   +2.48
+//   Health on Crit
+//   +4.95
+//   Compare vs Equipped
+function parseItemPaste(text, master) {
+  const rawLines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  if (!rawLines.length) return null;
+
+  let rarity = null;
+  for (const line of rawLines) {
+    const found = master.rarities.find(r => new RegExp(`\\b${r}\\b`, 'i').test(line));
+    if (found) { rarity = found; break; }
+  }
+
+  let itemName = null;
+  const candidates = [];
+  if (rawLines[0]) {
+    candidates.push(rawLines[0]);
+    candidates.push(rawLines[0].replace(/Lv\.?\s*\d+\s*$/i, '').trim());
+  }
+  if (rawLines[1]) candidates.push(rawLines[1]);
+  for (const c of candidates) {
+    const foundName = Object.keys(modalItemMap).find(name => name.toLowerCase() === c.toLowerCase());
+    if (foundName) { itemName = foundName; break; }
+  }
+
+  const affixNames = [];
+  const affixIdx = rawLines.findIndex(l => /^affixes$/i.test(l));
+  if (affixIdx !== -1) {
+    for (let i = affixIdx + 1; i < rawLines.length; i++) {
+      const line = rawLines[i];
+      if (/^compare\b/i.test(line)) break;
+      if (/^[+-]?\d/.test(line)) continue;
+      affixNames.push(line);
+    }
+  }
+
+  return { rarity, itemName, affixNames };
+}
+
+document.getElementById('modalPasteBox').addEventListener('input', async () => {
+  const master = await ensureItemMaster();
+  const text = document.getElementById('modalPasteBox').value;
+  const parsed = parseItemPaste(text, master);
+  if (!parsed) return;
+  if (parsed.itemName) document.getElementById('modalItemInput').value = parsed.itemName;
+  if (parsed.rarity) document.getElementById('modalRarity').value = parsed.rarity;
+  modalSelectedAffixes.clear();
+  if (parsed.itemName && parsed.affixNames.length) {
+    const entry = modalItemMap[parsed.itemName];
+    const pool = master.affixPools[entry.category] || [];
+    parsed.affixNames.forEach(raw => {
+      const match = pool.find(a => a.toLowerCase() === raw.toLowerCase());
+      if (match) modalSelectedAffixes.add(match);
+    });
+  }
+  buildModalAffixes(master);
+});
 
 document.getElementById('modalItemInput').addEventListener('input', () => {
   modalSelectedAffixes.clear();
@@ -682,6 +796,49 @@ function hideTooltip() {
   delete tooltipEl.dataset.owner;
 }
 
+const deleteConfirmEl = document.getElementById('deleteConfirmEl');
+let deleteConfirmItemId = null;
+function showDeleteConfirm(triggerEl, itemId) {
+  deleteConfirmItemId = itemId;
+  deleteConfirmEl.style.display = 'flex';
+  const rect = triggerEl.getBoundingClientRect();
+  const margin = 6;
+  const w = deleteConfirmEl.offsetWidth;
+  let left = rect.left;
+  let top = rect.bottom + margin;
+  if (left + w > window.innerWidth - margin) left = window.innerWidth - w - margin;
+  if (left < margin) left = margin;
+  deleteConfirmEl.style.left = `${left}px`;
+  deleteConfirmEl.style.top = `${top}px`;
+}
+function hideDeleteConfirm() {
+  deleteConfirmEl.style.display = 'none';
+  deleteConfirmItemId = null;
+}
+document.getElementById('deleteConfirmBtn').addEventListener('click', async (e) => {
+  e.stopPropagation();
+  const id = deleteConfirmItemId;
+  if (!id) return;
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  try {
+    const token = localStorage.getItem('sf_token');
+    const r = await fetch(`${API_BASE}/api/items/${id}/remove`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Something went wrong.');
+    items = items.filter(x => x.id !== id);
+    hideDeleteConfirm();
+    render();
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 function render() {
   const q = document.getElementById('search').value.toLowerCase();
   const filtered = items.filter(i =>
@@ -706,8 +863,9 @@ function render() {
   document.getElementById('itemCount').textContent = filtered.length === items.length
     ? `${items.length} item${items.length === 1 ? '' : 's'} in the chest`
     : `Showing ${filtered.length} of ${items.length} items`;
-  document.getElementById('actionsHeader').style.display = currentUser ? '' : 'none';
   hideTooltip();
+  hideDeleteConfirm();
+  const canManage = currentUser && currentUser.linked;
   filtered.forEach(i => {
     const rarityColor = RARITY_COLORS[i.rarity] || '#9a9ea8';
     const isNew = isItemNew(i);
@@ -718,26 +876,15 @@ function render() {
       const d = i.borrowed_at ? new Date(i.borrowed_at).toLocaleDateString() : '';
       statusTitle = `Rented to ${i.borrower_name}${d ? ' on ' + d : ''}`;
     }
-    let actionsCell = '';
-    if (currentUser) {
-      let actionsHtml = '';
-      if (i.status === 'available' && i.owner_id !== currentUser.id) {
-        actionsHtml += `<button class="rowbtn" data-action="borrow" data-id="${i.id}">Borrow</button>`;
-      }
-      if (i.owner_id === currentUser.id || currentUser.officer) {
-        actionsHtml += `<button class="rowbtn danger" data-action="remove" data-id="${i.id}">Remove</button>`;
-      }
-      actionsCell = `<td><div class="rowbtns">${actionsHtml}</div></td>`;
-    }
+    const canRemoveThis = canManage && (i.owner_id === currentUser.id || currentUser.officer);
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td><span class="itemname" style="color:${rarityColor}">${i.name}${isNew ? '<span class="newbadge">New</span>' : ''}</span></td>
+      <td><span class="itemname${canRemoveThis ? ' clickable' : ''}" style="color:${rarityColor}">${i.name}${isNew ? '<span class="newbadge">New</span>' : ''}</span></td>
       <td class="muted">${i.category || ''}</td>
       <td class="muted">${abbreviateClasses(i.classes)}</td>
       <td class="muted">${i.owner_name || ''}</td>
       <td><div class="affixlist">${(i.affixes || []).map(a => `<span class="affix">${a}</span>`).join('')}</div></td>
       <td><span class="status" ${statusTitle ? `data-tooltip="${statusTitle}"` : ''}><span class="dot" style="background:${statusColor}"></span>${statusLabel}</span></td>
-      ${actionsCell}
     `;
     if (statusTitle) {
       const statusEl = tr.querySelector('.status');
@@ -749,44 +896,25 @@ function render() {
         showTooltip(statusEl, statusTitle);
       });
     }
-    tr.querySelectorAll('[data-action]').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
+    if (canRemoveThis) {
+      const nameEl = tr.querySelector('.itemname');
+      nameEl.addEventListener('click', (e) => {
         e.stopPropagation();
-        const action = btn.dataset.action;
-        const id = btn.dataset.id;
-        if (action === 'remove' && !confirm('Remove this item from the chest?')) return;
-        btn.disabled = true;
-        try {
-          const token = localStorage.getItem('sf_token');
-          const r = await fetch(`${API_BASE}/api/items/${id}/${action}`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          const data = await r.json();
-          if (!r.ok) throw new Error(data.error || 'Something went wrong.');
-          if (action === 'borrow') {
-            const idx = items.findIndex(x => x.id === id);
-            if (idx !== -1) items[idx] = data.item;
-          } else {
-            items = items.filter(x => x.id !== id);
-          }
-          render();
-        } catch (err) {
-          alert(err.message);
-          btn.disabled = false;
-        }
+        if (deleteConfirmItemId === i.id) { hideDeleteConfirm(); return; }
+        showDeleteConfirm(nameEl, i.id);
       });
-    });
+    }
     rows.appendChild(tr);
   });
 }
 
-document.querySelector('.tablewrap').addEventListener('scroll', hideTooltip);
-window.addEventListener('scroll', hideTooltip, true);
-window.addEventListener('resize', hideTooltip);
+document.querySelector('.tablewrap').addEventListener('scroll', () => { hideTooltip(); hideDeleteConfirm(); });
+window.addEventListener('scroll', () => { hideTooltip(); hideDeleteConfirm(); }, true);
+window.addEventListener('resize', () => { hideTooltip(); hideDeleteConfirm(); });
 
 document.addEventListener('click', () => {
   hideTooltip();
+  hideDeleteConfirm();
 });
 
 (async function init() {

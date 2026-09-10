@@ -149,9 +149,11 @@
   .btn-cancel { background: var(--bg); border: 1px solid var(--border); color: var(--text); }
   .modal-error { color: #f87171; font-size: 13px; margin-top: 10px; display: none; }
   .back-to-top {
-    position: fixed; bottom: 28px; right: 28px; background: var(--surface);
-    border: 1px solid var(--border); color: var(--text); padding: 11px 18px;
-    border-radius: 10px; cursor: pointer; display: none; z-index: 99; font-size: 14px;
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    width: 44px; height: 44px; background: var(--surface);
+    border: 1px solid var(--border); color: var(--text);
+    border-radius: 50%; cursor: pointer; display: none; z-index: 99;
+    align-items: center; justify-content: center; font-size: 18px; line-height: 1;
     box-shadow: 0 4px 16px rgba(0,0,0,.4);
   }
   .back-to-top:hover { border-color: var(--accent); color: var(--accent); }
@@ -237,7 +239,7 @@
   <span>Remove this item?</span>
   <button class="rowbtn danger" id="deleteConfirmBtn">Delete</button>
 </div>
-<button id="topBtn" class="back-to-top">&uarr; Top</button>
+<button id="topBtn" class="back-to-top">&uarr;</button>
 
 <div class="modalbg" id="addModalBg" style="display:none;">
   <div class="modal">
@@ -961,7 +963,7 @@ document.addEventListener('click', () => {
 
 const topBtn = document.getElementById('topBtn');
 window.addEventListener('scroll', () => {
-  topBtn.style.display = window.scrollY > 500 ? 'block' : 'none';
+  topBtn.style.display = window.scrollY > 500 ? 'flex' : 'none';
 });
 topBtn.addEventListener('click', () => {
   window.scrollTo({ top: 0, behavior: 'smooth' });

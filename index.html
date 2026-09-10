@@ -54,7 +54,19 @@
     font-size: 12px; background: var(--bg); padding: 4px 10px; border-radius: 7px;
     color: var(--text-secondary); white-space: nowrap; display: inline-block;
   }
-  .status { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-secondary); white-space: nowrap; }
+  .status { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-secondary); white-space: nowrap; position: relative; }
+  .status[data-tooltip] { cursor: help; border-bottom: 1px dotted var(--text-muted); }
+  .status[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute; bottom: 130%; left: 0;
+    background: #000; color: #fff; padding: 6px 10px; border-radius: 6px;
+    font-size: 12px; white-space: nowrap; z-index: 10;
+    box-shadow: 0 4px 12px rgba(0,0,0,.5);
+  }
+  .tablewrap::-webkit-scrollbar { height: 8px; }
+  .tablewrap::-webkit-scrollbar-track { background: var(--surface); }
+  .tablewrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  .tablewrap { scrollbar-width: thin; scrollbar-color: var(--border) var(--surface); }
   .empty { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 15px; }
   .loading { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 15px; }
 </style>
@@ -225,7 +237,7 @@ function render() {
       <td class="muted">${(i.classes || []).join(', ')}</td>
       <td class="muted">${i.owner_name || ''}</td>
       <td><div class="affixlist">${(i.affixes || []).map(a => `<span class="affix">${a}</span>`).join('')}</div></td>
-      <td><span class="status" title="${statusTitle}" style="${statusTitle ? 'cursor:help; border-bottom:1px dotted var(--text-muted);' : ''}"><span class="dot" style="background:${statusColor}"></span>${statusLabel}</span></td>
+      <td><span class="status" ${statusTitle ? `data-tooltip="${statusTitle}"` : ''}><span class="dot" style="background:${statusColor}"></span>${statusLabel}</span></td>
     `;
     rows.appendChild(tr);
   });

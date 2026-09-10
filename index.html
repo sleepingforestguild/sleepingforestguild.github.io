@@ -32,6 +32,7 @@
     padding: 13px 22px; border-radius: 10px; cursor: pointer; font-size: 15px;
   }
   button.reset:hover { border-color: var(--accent); }
+  button.reset.active { background: rgba(124,140,248,.15); border-color: var(--accent); color: var(--accent); }
   .label { font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; margin: 0 0 10px; }
   .pillrow { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
   .pill {
@@ -85,22 +86,77 @@
   .empty { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 15px; }
   .loading { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 15px; }
   html, body { overflow-x: hidden; }
+
+  .topbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+  .authbox { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .authbox img { width: 32px; height: 32px; border-radius: 50%; }
+  .authbox .uname { font-size: 14px; color: var(--text); }
+  .btn-discord {
+    background: #5865F2; border: none; color: #fff; padding: 10px 18px;
+    border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .btn-discord:hover { background: #4752c4; }
+  .link-muted { color: var(--text-muted); font-size: 13px; cursor: pointer; text-decoration: underline; background: none; border: none; }
+  .count { color: var(--text-muted); font-size: 13px; margin: -12px 0 14px; }
+  .autherror { color: #f87171; font-size: 13px; margin: -18px 0 20px; }
+
+  .rowbtn {
+    background: rgba(124,140,248,.15); border: 1px solid var(--accent); color: var(--accent);
+    padding: 5px 12px; border-radius: 7px; font-size: 12px; cursor: pointer; white-space: nowrap;
+  }
+  .rowbtn:hover { background: rgba(124,140,248,.28); }
+  .rowbtn.danger { background: rgba(248,113,113,.12); border-color: #f87171; color: #f87171; }
+  .rowbtn.danger:hover { background: rgba(248,113,113,.25); }
+  .rowbtns { display: flex; gap: 6px; }
+
+  .modalbg {
+    position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex;
+    align-items: center; justify-content: center; z-index: 100; padding: 20px;
+  }
+  .modal {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 28px; width: 100%; max-width: 520px; max-height: 85vh; overflow-y: auto;
+  }
+  .modal h2 { margin: 0 0 18px; font-size: 20px; }
+  .modal label { display: block; font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; margin: 16px 0 8px; }
+  .modal label:first-of-type { margin-top: 0; }
+  .modal input[type=text], .modal select {
+    width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    padding: 11px 14px; border-radius: 9px; font-size: 15px;
+  }
+  .modal-close { float: right; background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer; line-height: 1; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 22px; }
+  .modal-actions button { flex: 1; padding: 12px; border-radius: 10px; font-size: 15px; cursor: pointer; }
+  .btn-primary { background: var(--accent); border: none; color: #0d0f14; font-weight: 600; }
+  .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-cancel { background: var(--bg); border: 1px solid var(--border); color: var(--text); }
+  .modal-error { color: #f87171; font-size: 13px; margin-top: 10px; display: none; }
+
   @media (max-width: 768px) {
     body { padding: 1.5rem 1rem; }
     h1 { font-size: 24px; }
     .tablewrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     table { min-width: 760px; }
     .status[data-tooltip]:hover::after { left: auto; right: 0; }
+    .topbar { flex-direction: column; }
   }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>SleepingForest Community Chest</h1>
-  <p class="sub">Browse donated gear. Use /additem in Discord to add your own.</p>
+  <div class="topbar">
+    <div>
+      <h1>SleepingForest Community Chest</h1>
+      <p class="sub">Browse donated gear, or log in with Discord to add and borrow items right here.</p>
+    </div>
+    <div class="authbox" id="authBox"></div>
+  </div>
+  <p class="autherror" id="authError" style="display:none;"></p>
 
   <div class="row">
     <input type="text" id="search" placeholder="Search items...">
+    <button class="reset" id="mineBtn" style="display:none;">Mine</button>
+    <button class="reset" id="addBtn">+ Add Item</button>
     <button class="reset" id="resetBtn">Reset</button>
   </div>
 
@@ -128,22 +184,48 @@
     </div>
   </div>
 
+  <p class="count" id="itemCount"></p>
+
   <div class="tablewrap">
     <table>
       <thead>
         <tr>
           <th style="width:24%">Item</th>
-          <th style="width:14%">Category</th>
-          <th style="width:14%">Class</th>
-          <th style="width:13%">Added by</th>
-          <th style="width:24%">Affixes</th>
-          <th style="width:11%">Status</th>
+          <th style="width:12%">Category</th>
+          <th style="width:12%">Class</th>
+          <th style="width:11%">Added by</th>
+          <th style="width:20%">Affixes</th>
+          <th style="width:10%">Status</th>
+          <th style="width:11%">Actions</th>
         </tr>
       </thead>
       <tbody id="rows"></tbody>
     </table>
     <div id="loading" class="loading">Loading chest...</div>
     <div id="empty" class="empty" style="display:none;">No items match those filters.</div>
+  </div>
+</div>
+
+<div class="modalbg" id="addModalBg" style="display:none;">
+  <div class="modal">
+    <button class="modal-close" id="modalClose">&times;</button>
+    <h2>Add an item</h2>
+
+    <label>Item</label>
+    <input type="text" id="modalItemInput" list="modalItemList" placeholder="Start typing an item name...">
+    <datalist id="modalItemList"></datalist>
+
+    <label>Rarity</label>
+    <select id="modalRarity"></select>
+
+    <label>Affixes</label>
+    <div class="pillrow" id="modalAffixes"></div>
+
+    <p class="modal-error" id="modalError"></p>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="modalCancel">Cancel</button>
+      <button class="btn-primary" id="modalSubmit">Add to chest</button>
+    </div>
   </div>
 </div>
 
@@ -203,8 +285,13 @@ const affixPools = {
 
 const RARITY_ORDER = ["Uncommon","Rare","Epic","Legendary","Mythic"];
 
+// TODO: set this to your actual Render service URL (Render dashboard -> your service -> the .onrender.com link)
+const API_BASE = "https://sleepingforest-bot.onrender.com";
+
 let items = [];
 let selType = null, selClass = null, selToolCat = null, selLevel = null;
+let mineOnly = false;
+let currentUser = null;
 const selAffixes = new Set();
 
 // Does item i belong to the current Type/Class/ToolCat selection? (level/affix not considered here)
@@ -363,11 +450,189 @@ function buildAffixes() {
 
 document.getElementById('resetBtn').onclick = () => {
   selType = null; selClass = null; selToolCat = null; selLevel = null; selAffixes.clear();
+  mineOnly = false;
+  document.getElementById('mineBtn').classList.remove('active');
   document.getElementById('search').value = '';
   [...typeEl.children].forEach(b => b.classList.remove('active'));
   buildClassWrap(); buildToolCatWrap(); buildLevels(); buildAffixes(); render();
 };
 document.getElementById('search').addEventListener('input', render);
+
+// -- Auth (Discord login) ----------------------------------------------------------------
+function handleAuthRedirect() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('token');
+  const authErr = params.get('auth_error');
+  if (token) { localStorage.setItem('sf_token', token); params.delete('token'); }
+  if (authErr) {
+    const messages = {
+      not_a_member: "You're not a member of the SleepingForest Discord server.",
+      missing_code: 'Discord login was cancelled or failed.',
+      server_error: 'Something went wrong logging you in - try again.',
+    };
+    const el = document.getElementById('authError');
+    el.textContent = messages[authErr] || 'Login failed - try again.';
+    el.style.display = 'block';
+    params.delete('auth_error');
+  }
+  const qs = params.toString();
+  history.replaceState({}, '', window.location.pathname + (qs ? '?' + qs : ''));
+}
+
+async function loadUser() {
+  const token = localStorage.getItem('sf_token');
+  if (!token) { currentUser = null; renderAuthBox(); return; }
+  try {
+    const r = await fetch(`${API_BASE}/api/me`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) throw new Error();
+    currentUser = await r.json();
+  } catch {
+    localStorage.removeItem('sf_token');
+    currentUser = null;
+  }
+  renderAuthBox();
+}
+
+function renderAuthBox() {
+  const box = document.getElementById('authBox');
+  const mineBtn = document.getElementById('mineBtn');
+  if (currentUser) {
+    const avatarUrl = currentUser.avatar
+      ? `https://cdn.discordapp.com/avatars/${currentUser.id}/${currentUser.avatar}.png?size=64`
+      : 'https://cdn.discordapp.com/embed/avatars/0.png';
+    box.innerHTML = `<img src="${avatarUrl}" alt=""><span class="uname">${currentUser.username}</span><button class="link-muted" id="logoutBtn">Log out</button>`;
+    document.getElementById('logoutBtn').onclick = () => {
+      localStorage.removeItem('sf_token');
+      currentUser = null; mineOnly = false;
+      mineBtn.classList.remove('active');
+      renderAuthBox(); render();
+    };
+    mineBtn.style.display = 'inline-block';
+  } else {
+    box.innerHTML = `<button class="btn-discord" id="loginBtn">Log in with Discord</button>`;
+    document.getElementById('loginBtn').onclick = () => { window.location.href = `${API_BASE}/auth/discord/login`; };
+    mineBtn.style.display = 'none';
+    mineOnly = false;
+  }
+}
+
+document.getElementById('mineBtn').onclick = () => {
+  mineOnly = !mineOnly;
+  document.getElementById('mineBtn').classList.toggle('active', mineOnly);
+  render();
+};
+
+// -- Add Item modal -----------------------------------------------------------------------
+let itemMasterCache = null;
+let modalSelectedAffixes = new Set();
+let modalItemMap = {};
+
+async function ensureItemMaster() {
+  if (itemMasterCache) return itemMasterCache;
+  const r = await fetch(`${API_BASE}/api/item-master`);
+  itemMasterCache = await r.json();
+  return itemMasterCache;
+}
+
+document.getElementById('addBtn').onclick = async () => {
+  if (!currentUser) { window.location.href = `${API_BASE}/auth/discord/login`; return; }
+  await openAddModal();
+};
+
+async function openAddModal() {
+  const master = await ensureItemMaster();
+  modalItemMap = {};
+  const list = document.getElementById('modalItemList');
+  list.innerHTML = '';
+  master.items.forEach(it => {
+    modalItemMap[it.name] = it;
+    const opt = document.createElement('option');
+    opt.value = it.name;
+    list.appendChild(opt);
+  });
+  const raritySel = document.getElementById('modalRarity');
+  raritySel.innerHTML = '';
+  master.rarities.forEach(r => {
+    const opt = document.createElement('option');
+    opt.value = r; opt.textContent = r;
+    raritySel.appendChild(opt);
+  });
+  document.getElementById('modalItemInput').value = '';
+  document.getElementById('modalError').style.display = 'none';
+  modalSelectedAffixes.clear();
+  buildModalAffixes(master);
+  document.getElementById('addModalBg').style.display = 'flex';
+}
+
+function buildModalAffixes(master) {
+  const affixEl = document.getElementById('modalAffixes');
+  affixEl.innerHTML = '';
+  const entry = modalItemMap[document.getElementById('modalItemInput').value];
+  const rarity = document.getElementById('modalRarity').value;
+  if (!entry) return;
+  const pool = master.affixPools[entry.category] || [];
+  const cap = master.rarityAffixCap[rarity] || 4;
+  pool.forEach(a => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'pill small';
+    btn.textContent = a;
+    if (modalSelectedAffixes.has(a)) btn.classList.add('active');
+    btn.onclick = () => {
+      if (modalSelectedAffixes.has(a)) { modalSelectedAffixes.delete(a); btn.classList.remove('active'); }
+      else if (modalSelectedAffixes.size < cap) { modalSelectedAffixes.add(a); btn.classList.add('active'); }
+    };
+    affixEl.appendChild(btn);
+  });
+}
+
+document.getElementById('modalItemInput').addEventListener('input', () => {
+  modalSelectedAffixes.clear();
+  ensureItemMaster().then(buildModalAffixes);
+});
+document.getElementById('modalRarity').addEventListener('change', () => {
+  modalSelectedAffixes.clear();
+  ensureItemMaster().then(buildModalAffixes);
+});
+
+function closeAddModal() { document.getElementById('addModalBg').style.display = 'none'; }
+document.getElementById('modalClose').onclick = closeAddModal;
+document.getElementById('modalCancel').onclick = closeAddModal;
+document.getElementById('addModalBg').addEventListener('click', (e) => {
+  if (e.target.id === 'addModalBg') closeAddModal();
+});
+
+document.getElementById('modalSubmit').onclick = async () => {
+  const itemName = document.getElementById('modalItemInput').value;
+  const rarity = document.getElementById('modalRarity').value;
+  const errEl = document.getElementById('modalError');
+  errEl.style.display = 'none';
+  if (!modalItemMap[itemName]) {
+    errEl.textContent = 'Pick an item from the list.';
+    errEl.style.display = 'block';
+    return;
+  }
+  const token = localStorage.getItem('sf_token');
+  const btn = document.getElementById('modalSubmit');
+  btn.disabled = true;
+  try {
+    const r = await fetch(`${API_BASE}/api/items/add`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ item: itemName, rarity, affixes: [...modalSelectedAffixes] }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Something went wrong.');
+    items.push(data.item);
+    closeAddModal();
+    render();
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+  }
+};
 
 function abbreviateClasses(classes) {
   if (!classes || !classes.length) return '';
@@ -401,6 +666,7 @@ function render() {
     i.name.toLowerCase().includes(q) &&
     itemMatchesFilters(i) &&
     (selLevel === null || i.level === selLevel) &&
+    (!mineOnly || !currentUser || i.owner_id === currentUser.id || i.borrower_id === currentUser.id) &&
     [...selAffixes].every(a => (i.affixes || []).includes(a))
   ).sort((a, b) => {
     const aNew = isItemNew(a), bNew = isItemNew(b);
@@ -415,6 +681,9 @@ function render() {
   const rows = document.getElementById('rows');
   rows.innerHTML = '';
   document.getElementById('empty').style.display = filtered.length ? 'none' : 'block';
+  document.getElementById('itemCount').textContent = filtered.length === items.length
+    ? `${items.length} item${items.length === 1 ? '' : 's'} in the chest`
+    : `Showing ${filtered.length} of ${items.length} items`;
   filtered.forEach(i => {
     const rarityColor = RARITY_COLORS[i.rarity] || '#9a9ea8';
     const isNew = isItemNew(i);
@@ -425,6 +694,15 @@ function render() {
       const d = i.borrowed_at ? new Date(i.borrowed_at).toLocaleDateString() : '';
       statusTitle = `Rented to ${i.borrower_name}${d ? ' on ' + d : ''}`;
     }
+    let actionsHtml = '';
+    if (currentUser) {
+      if (i.status === 'available' && i.owner_id !== currentUser.id) {
+        actionsHtml += `<button class="rowbtn" data-action="borrow" data-id="${i.id}">Borrow</button>`;
+      }
+      if (i.owner_id === currentUser.id || currentUser.officer) {
+        actionsHtml += `<button class="rowbtn danger" data-action="remove" data-id="${i.id}">Remove</button>`;
+      }
+    }
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td><span class="itemname" style="color:${rarityColor}">${i.name}${isNew ? '<span class="newbadge">New</span>' : ''}</span></td>
@@ -433,6 +711,7 @@ function render() {
       <td class="muted">${i.owner_name || ''}</td>
       <td><div class="affixlist">${(i.affixes || []).map(a => `<span class="affix">${a}</span>`).join('')}</div></td>
       <td><span class="status" ${statusTitle ? `data-tooltip="${statusTitle}"` : ''}><span class="dot" style="background:${statusColor}"></span>${statusLabel}</span></td>
+      <td><div class="rowbtns">${actionsHtml}</div></td>
     `;
     if (statusTitle) {
       const statusEl = tr.querySelector('.status');
@@ -443,6 +722,34 @@ function render() {
         if (!wasOpen) statusEl.classList.add('show-tip');
       });
     }
+    tr.querySelectorAll('[data-action]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const action = btn.dataset.action;
+        const id = btn.dataset.id;
+        if (action === 'remove' && !confirm('Remove this item from the chest?')) return;
+        btn.disabled = true;
+        try {
+          const token = localStorage.getItem('sf_token');
+          const r = await fetch(`${API_BASE}/api/items/${id}/${action}`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const data = await r.json();
+          if (!r.ok) throw new Error(data.error || 'Something went wrong.');
+          if (action === 'borrow') {
+            const idx = items.findIndex(x => x.id === id);
+            if (idx !== -1) items[idx] = data.item;
+          } else {
+            items = items.filter(x => x.id !== id);
+          }
+          render();
+        } catch (err) {
+          alert(err.message);
+          btn.disabled = false;
+        }
+      });
+    });
     rows.appendChild(tr);
   });
 }
@@ -451,19 +758,19 @@ document.addEventListener('click', () => {
   document.querySelectorAll('.status.show-tip').forEach(el => el.classList.remove('show-tip'));
 });
 
-fetch(ITEMS_URL)
-  .then(r => {
+(async function init() {
+  handleAuthRedirect();
+  await loadUser();
+  try {
+    const r = await fetch(ITEMS_URL);
     if (!r.ok) throw new Error('items.json not found yet - add your first item with /additem');
-    return r.json();
-  })
-  .then(data => {
-    items = data;
+    items = await r.json();
     document.getElementById('loading').style.display = 'none';
     render();
-  })
-  .catch(err => {
+  } catch (err) {
     document.getElementById('loading').textContent = err.message;
-  });
+  }
+})();
 </script>
 </body>
 </html>

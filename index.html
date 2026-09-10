@@ -112,9 +112,15 @@
     <div class="pillrow" id="categories"></div>
   </div>
 
-  <div id="affixWrap" style="display:none;">
-    <p class="label">Affixes (up to 4)</p>
-    <div class="pillrow" id="affixes"></div>
+  <div id="detailWrap" style="display:none;">
+    <div id="levelWrap" style="display:none;">
+      <p class="label">Level</p>
+      <div class="pillrow" id="levels"></div>
+    </div>
+    <div id="affixWrap" style="display:none;">
+      <p class="label">Affixes (up to 4)</p>
+      <div class="pillrow" id="affixes"></div>
+    </div>
   </div>
 
   <div class="tablewrap">
@@ -168,16 +174,18 @@ const affixPools = {
   Gloves: ["Attack Power","Attack Speed","Critical Chance","Critical Damage","Defense Penetration","Resource Efficiency","Health on Hit","Health on Crit","Energy on Hit","Energy on Crit"],
   Boots: ["Max Health","Max Energy","Attack Speed","Defense","Health on Dodge","Health on Crit","Energy on Crit","Energy on Dodge","Dodge","Critical Damage"],
   Shoes: ["Max Health","Max Energy","Attack Speed","Defense","Health on Dodge","Health on Crit","Energy on Crit","Energy on Dodge","Dodge","Critical Damage"],
-  Ring: ["Max Health","Max Energy","Attack Power","Defense","Critical Damage","Defense Penetration","Resource Efficiency","Health on Hit","Health on Crit","Energy on Hit","Drop Chance","Gold Find"],
-  Amulet: ["Max Health","Max Energy","Defense","Resource Efficiency","Damage Reflect","Health on Crit","Health on Dodge","Health on Block","Energy on Block","Perfect Block","Combat XP","Pet XP"],
+  Ring: ["Max Health","Max Energy","Attack Power","Defense","Critical Damage","Defense Penetration","Health on Hit","Health on Crit","Energy on Hit","Energy on Crit","Drop Chance","Gold Find"],
+  Amulet: ["Max Health","Max Energy","Defense","Resource Efficiency","Damage Reflect","Perfect Block","Health on Dodge","Health on Block","Energy on Dodge","Energy on Block","Combat XP","Pet XP"],
   Shield: ["Max Health","Max Energy","Attack Power","Defense","Resource Efficiency","Damage Reflect","Block Chance","Perfect Block","Health on Block","Energy on Block"],
   Sword: ["Attack Power","Attack Speed","Critical Chance","Critical Damage","Defense Penetration","Resource Efficiency","Health on Hit","Health on Crit","Energy on Hit","Energy on Crit"],
   Staff: ["Attack Power","Attack Speed","Critical Chance","Critical Damage","Defense Penetration","Resource Efficiency","Health on Hit","Health on Crit","Energy on Hit","Energy on Crit"],
   Bow: ["Attack Power","Attack Speed","Critical Chance","Critical Damage","Defense Penetration","Resource Efficiency","Health on Hit","Health on Crit","Energy on Hit","Energy on Crit"]
 };
 
+const RARITY_ORDER = ["Uncommon","Rare","Epic","Legendary","Mythic"];
+
 let items = [];
-let selClass = null, selCategory = null;
+let selClass = null, selCategory = null, selLevel = null;
 const selAffixes = new Set();
 
 const classEl = document.getElementById('classes');
@@ -187,10 +195,10 @@ classesList.forEach(c => {
   btn.textContent = c;
   btn.onclick = () => {
     selClass = selClass === c ? null : c;
-    selCategory = null; selAffixes.clear();
+    selCategory = null; selLevel = null; selAffixes.clear();
     [...classEl.children].forEach(b => b.classList.remove('active'));
     if (selClass) btn.classList.add('active');
-    buildCategories(); buildAffixes(); render();
+    buildCategories(); buildLevels(); buildAffixes(); render();
   };
   classEl.appendChild(btn);
 });
@@ -208,13 +216,62 @@ function buildCategories() {
     btn.textContent = cat;
     btn.onclick = () => {
       selCategory = selCategory === cat ? null : cat;
-      selAffixes.clear();
+      selLevel = null; selAffixes.clear();
       [...catEl.children].forEach(b => b.classList.remove('active'));
       if (selCategory) btn.classList.add('active');
-      buildAffixes(); render();
+      buildLevels(); buildAffixes(); render();
     };
     catEl.appendChild(btn);
   });
+}
+
+// Items matching the currently selected class + category (used to derive level pills)
+function itemsInScope() {
+  return items.filter(i =>
+    (!selClass || (i.classes || []).includes(selClass) || (i.classes || []).includes('All')) &&
+    (!selCategory || i.category === selCategory)
+  );
+}
+
+// Turns "Copper Helmet" + category "Helmet" into tier label "Copper"
+function tierLabel(name, cat) {
+  const suffix = ' ' + cat;
+  return name.endsWith(suffix) ? name.slice(0, -suffix.length) : name;
+}
+
+function updateDetailWrapVisibility() {
+  const detailWrap = document.getElementById('detailWrap');
+  const levelWrap = document.getElementById('levelWrap');
+  const affixWrap = document.getElementById('affixWrap');
+  const showDetail = levelWrap.style.display !== 'none' || affixWrap.style.display !== 'none';
+  detailWrap.style.display = showDetail ? 'block' : 'none';
+}
+
+function buildLevels() {
+  const wrap = document.getElementById('levelWrap');
+  const levelEl = document.getElementById('levels');
+  levelEl.innerHTML = '';
+  if (!selCategory) { wrap.style.display = 'none'; updateDetailWrapVisibility(); return; }
+  const seen = new Map();
+  itemsInScope().forEach(i => {
+    if (!seen.has(i.level)) seen.set(i.level, tierLabel(i.name, selCategory));
+  });
+  const tiers = [...seen.entries()].sort((a, b) => b[0] - a[0]);
+  if (tiers.length < 2) { wrap.style.display = 'none'; updateDetailWrapVisibility(); return; }
+  wrap.style.display = 'block';
+  tiers.forEach(([lvl, label]) => {
+    const btn = document.createElement('button');
+    btn.className = 'pill small';
+    btn.textContent = label;
+    btn.onclick = () => {
+      selLevel = selLevel === lvl ? null : lvl;
+      [...levelEl.children].forEach(b => b.classList.remove('active'));
+      if (selLevel !== null) btn.classList.add('active');
+      render();
+    };
+    levelEl.appendChild(btn);
+  });
+  updateDetailWrapVisibility();
 }
 
 function buildAffixes() {
@@ -222,7 +279,7 @@ function buildAffixes() {
   const affixEl = document.getElementById('affixes');
   affixEl.innerHTML = '';
   const pool = affixPools[selCategory] || [];
-  if (!selCategory || pool.length === 0) { wrap.style.display = 'none'; return; }
+  if (!selCategory || pool.length === 0) { wrap.style.display = 'none'; updateDetailWrapVisibility(); return; }
   wrap.style.display = 'block';
   pool.forEach(a => {
     const btn = document.createElement('button');
@@ -235,13 +292,14 @@ function buildAffixes() {
     };
     affixEl.appendChild(btn);
   });
+  updateDetailWrapVisibility();
 }
 
 document.getElementById('resetBtn').onclick = () => {
-  selClass = null; selCategory = null; selAffixes.clear();
+  selClass = null; selCategory = null; selLevel = null; selAffixes.clear();
   document.getElementById('search').value = '';
   [...classEl.children].forEach(b => b.classList.remove('active'));
-  buildCategories(); buildAffixes(); render();
+  buildCategories(); buildLevels(); buildAffixes(); render();
 };
 document.getElementById('search').addEventListener('input', render);
 
@@ -277,13 +335,17 @@ function render() {
     i.name.toLowerCase().includes(q) &&
     (!selClass || (i.classes || []).includes(selClass) || (i.classes || []).includes('All')) &&
     (!selCategory || i.category === selCategory) &&
+    (selLevel === null || i.level === selLevel) &&
     [...selAffixes].every(a => (i.affixes || []).includes(a))
   ).sort((a, b) => {
     const aNew = isItemNew(a), bNew = isItemNew(b);
     if (aNew !== bNew) return aNew ? -1 : 1;
     const aRented = a.status === 'rented', bRented = b.status === 'rented';
     if (aRented !== bRented) return aRented ? 1 : -1;
-    return (b.level || 0) - (a.level || 0);
+    const aLevel = a.level || 0, bLevel = b.level || 0;
+    if (aLevel !== bLevel) return bLevel - aLevel;
+    const aRarity = RARITY_ORDER.indexOf(a.rarity), bRarity = RARITY_ORDER.indexOf(b.rarity);
+    return bRarity - aRarity;
   });
   const rows = document.getElementById('rows');
   rows.innerHTML = '';
@@ -300,7 +362,7 @@ function render() {
     }
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td><span class="itemname"><span class="dot" style="background:${rarityColor}"></span>${i.name}${isNew ? '<span class="newbadge">New</span>' : ''}</span></td>
+      <td><span class="itemname" style="color:${rarityColor}">${i.name}${isNew ? '<span class="newbadge">New</span>' : ''}</span></td>
       <td class="muted">${i.category || ''}</td>
       <td class="muted">${abbreviateClasses(i.classes)}</td>
       <td class="muted">${i.owner_name || ''}</td>

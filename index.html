@@ -42,14 +42,18 @@
   .pill:hover { border-color: var(--accent); }
   .pill.active { background: rgba(124,140,248,.15); border-color: var(--accent); color: var(--accent); }
   .pill.small { font-size: 14px; padding: 6px 14px; }
-  table { width: 100%; border-collapse: collapse; font-size: 14px; table-layout: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; table-layout: auto; }
   thead th {
-    text-align: left; padding: 12px 14px; color: var(--text-muted);
+    text-align: left; padding: 14px 16px; color: var(--text-muted);
     border-bottom: 1px solid var(--border); font-weight: 500; font-size: 12px;
     text-transform: uppercase; letter-spacing: .04em; white-space: nowrap;
+    position: sticky; top: 0; background: var(--surface); z-index: 5;
   }
-  tbody td { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; white-space: nowrap; }
-  .tablewrap { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  tbody td { padding: 14px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; white-space: nowrap; }
+  .tablewrap {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    overflow-x: auto; overflow-y: visible; -webkit-overflow-scrolling: touch;
+  }
   .itemname { display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 15px; white-space: nowrap; }
   .itemname.clickable { cursor: pointer; }
   .itemname.clickable:hover { text-decoration: underline; }
@@ -146,6 +150,13 @@
   .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
   .btn-cancel { background: var(--bg); border: 1px solid var(--border); color: var(--text); }
   .modal-error { color: #f87171; font-size: 13px; margin-top: 10px; display: none; }
+  .back-to-top {
+    position: fixed; bottom: 28px; right: 28px; background: var(--surface);
+    border: 1px solid var(--border); color: var(--text); padding: 11px 18px;
+    border-radius: 10px; cursor: pointer; display: none; z-index: 99; font-size: 14px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.4);
+  }
+  .back-to-top:hover { border-color: var(--accent); color: var(--accent); }
 
   @media (max-width: 768px) {
     body { padding: 1.5rem 1rem; }
@@ -206,12 +217,12 @@
     <table>
       <thead>
         <tr>
-          <th style="width:22%">Item</th>
-          <th style="width:12%">Category</th>
-          <th style="width:12%">Class</th>
-          <th style="width:12%">Added by</th>
-          <th style="width:30%">Affixes</th>
-          <th style="width:12%">Status</th>
+          <th style="width:16%">Item</th>
+          <th style="width:9%">Category</th>
+          <th style="width:9%">Class</th>
+          <th style="width:9%">Added by</th>
+          <th style="width:47%">Affixes</th>
+          <th style="width:10%">Status</th>
         </tr>
       </thead>
       <tbody id="rows"></tbody>
@@ -226,6 +237,7 @@
   <span>Remove this item?</span>
   <button class="rowbtn danger" id="deleteConfirmBtn">Delete</button>
 </div>
+<button id="topBtn" class="back-to-top">&uarr; Top</button>
 
 <div class="modalbg" id="addModalBg" style="display:none;">
   <div class="modal">
@@ -945,6 +957,14 @@ window.addEventListener('resize', () => { hideTooltip(); hideDeleteConfirm(); })
 document.addEventListener('click', () => {
   hideTooltip();
   hideDeleteConfirm();
+});
+
+const topBtn = document.getElementById('topBtn');
+window.addEventListener('scroll', () => {
+  topBtn.style.display = window.scrollY > 500 ? 'block' : 'none';
+});
+topBtn.addEventListener('click', () => {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
 (async function init() {

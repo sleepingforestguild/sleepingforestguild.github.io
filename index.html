@@ -42,14 +42,14 @@
   .pill:hover { border-color: var(--accent); }
   .pill.active { background: rgba(124,140,248,.15); border-color: var(--accent); color: var(--accent); }
   .pill.small { font-size: 14px; padding: 6px 14px; }
-  table { width: 100%; border-collapse: collapse; font-size: 15px; table-layout: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; table-layout: auto; min-width: 900px; }
   thead th {
     text-align: left; padding: 14px 16px; color: var(--text-muted);
     border-bottom: 1px solid var(--border); font-weight: 500; font-size: 12px;
     text-transform: uppercase; letter-spacing: .04em; white-space: nowrap;
   }
   tbody td { padding: 14px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-  .tablewrap { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: visible; }
+  .tablewrap { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .itemname { display: flex; align-items: center; gap: 9px; font-weight: 500; font-size: 16px; white-space: nowrap; }
   .newbadge {
     font-size: 10px; font-weight: 600; background: var(--accent); color: #0d0f14;
@@ -68,20 +68,11 @@
     color: var(--text-secondary); white-space: nowrap; display: inline-block;
   }
   .status { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-secondary); white-space: nowrap; position: relative; }
-  .status[data-tooltip] { cursor: help; }
-  .status.show-tip::after {
-    content: attr(data-tooltip);
-    position: absolute; bottom: 130%; left: 0;
-    background: #000; color: #fff; padding: 6px 10px; border-radius: 6px;
-    font-size: 12px; white-space: nowrap; z-index: 10;
-    box-shadow: 0 4px 12px rgba(0,0,0,.5);
-  }
-  .status[data-tooltip]:hover::after {
-    content: attr(data-tooltip);
-    position: absolute; bottom: 130%; left: 0;
-    background: #000; color: #fff; padding: 6px 10px; border-radius: 6px;
-    font-size: 12px; white-space: nowrap; z-index: 10;
-    box-shadow: 0 4px 12px rgba(0,0,0,.5);
+  .status[data-tooltip] { cursor: pointer; }
+  .tooltip-fixed {
+    position: fixed; display: none; background: #000; color: #fff; padding: 6px 10px;
+    border-radius: 6px; font-size: 12px; white-space: nowrap; z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0,0,0,.5); pointer-events: none;
   }
   .empty { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 15px; }
   .loading { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 15px; }
@@ -122,7 +113,14 @@
   .modal label:first-of-type { margin-top: 0; }
   .modal input[type=text], .modal select {
     width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text);
-    padding: 11px 14px; border-radius: 9px; font-size: 15px;
+    padding: 11px 14px; border-radius: 9px; font-size: 15px; height: 44px; line-height: 1.4;
+    box-sizing: border-box; font-family: inherit;
+  }
+  .modal select {
+    -webkit-appearance: none; appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%239a9ea8'/></svg>");
+    background-repeat: no-repeat; background-position: right 14px center;
+    padding-right: 36px;
   }
   .modal-close { float: right; background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer; line-height: 1; }
   .modal-actions { display: flex; gap: 10px; margin-top: 22px; }
@@ -135,9 +133,6 @@
   @media (max-width: 768px) {
     body { padding: 1.5rem 1rem; }
     h1 { font-size: 24px; }
-    .tablewrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    table { min-width: 760px; }
-    .status[data-tooltip]:hover::after { left: auto; right: 0; }
     .topbar { flex-direction: column; }
   }
 </style>
@@ -156,7 +151,7 @@
   <div class="row">
     <input type="text" id="search" placeholder="Search items...">
     <button class="reset" id="mineBtn" style="display:none;">Mine</button>
-    <button class="reset" id="addBtn">+ Add Item</button>
+    <button class="reset" id="addBtn" style="display:none;">+ Add Item</button>
     <button class="reset" id="resetBtn">Reset</button>
   </div>
 
@@ -196,7 +191,7 @@
           <th style="width:11%">Added by</th>
           <th style="width:20%">Affixes</th>
           <th style="width:10%">Status</th>
-          <th style="width:11%">Actions</th>
+          <th style="width:11%" id="actionsHeader">Actions</th>
         </tr>
       </thead>
       <tbody id="rows"></tbody>
@@ -205,6 +200,8 @@
     <div id="empty" class="empty" style="display:none;">No items match those filters.</div>
   </div>
 </div>
+
+<div class="tooltip-fixed" id="tooltipEl"></div>
 
 <div class="modalbg" id="addModalBg" style="display:none;">
   <div class="modal">
@@ -496,6 +493,7 @@ async function loadUser() {
 function renderAuthBox() {
   const box = document.getElementById('authBox');
   const mineBtn = document.getElementById('mineBtn');
+  const addBtn = document.getElementById('addBtn');
   if (currentUser) {
     const avatarUrl = currentUser.avatar
       ? `https://cdn.discordapp.com/avatars/${currentUser.id}/${currentUser.avatar}.png?size=64`
@@ -508,10 +506,12 @@ function renderAuthBox() {
       renderAuthBox(); render();
     };
     mineBtn.style.display = 'inline-block';
+    addBtn.style.display = 'inline-block';
   } else {
     box.innerHTML = `<button class="btn-discord" id="loginBtn">Log in with Discord</button>`;
     document.getElementById('loginBtn').onclick = () => { window.location.href = `${API_BASE}/auth/discord/login`; };
     mineBtn.style.display = 'none';
+    addBtn.style.display = 'none';
     mineOnly = false;
   }
 }
@@ -557,6 +557,7 @@ async function openAddModal() {
     opt.value = r; opt.textContent = r;
     raritySel.appendChild(opt);
   });
+  raritySel.selectedIndex = 0;
   document.getElementById('modalItemInput').value = '';
   document.getElementById('modalError').style.display = 'none';
   modalSelectedAffixes.clear();
@@ -660,6 +661,27 @@ function isItemNew(i) {
   return !!(i.added_at && (Date.now() - new Date(i.added_at).getTime()) < 24 * 60 * 60 * 1000);
 }
 
+const tooltipEl = document.getElementById('tooltipEl');
+function showTooltip(triggerEl, text) {
+  tooltipEl.textContent = text;
+  tooltipEl.style.display = 'block';
+  const rect = triggerEl.getBoundingClientRect();
+  const margin = 8;
+  const tw = tooltipEl.offsetWidth;
+  const th = tooltipEl.offsetHeight;
+  let left = rect.left;
+  let top = rect.top - th - margin;
+  if (left + tw > window.innerWidth - margin) left = window.innerWidth - tw - margin;
+  if (left < margin) left = margin;
+  if (top < margin) top = rect.bottom + margin;
+  tooltipEl.style.left = `${left}px`;
+  tooltipEl.style.top = `${top}px`;
+}
+function hideTooltip() {
+  tooltipEl.style.display = 'none';
+  delete tooltipEl.dataset.owner;
+}
+
 function render() {
   const q = document.getElementById('search').value.toLowerCase();
   const filtered = items.filter(i =>
@@ -684,6 +706,8 @@ function render() {
   document.getElementById('itemCount').textContent = filtered.length === items.length
     ? `${items.length} item${items.length === 1 ? '' : 's'} in the chest`
     : `Showing ${filtered.length} of ${items.length} items`;
+  document.getElementById('actionsHeader').style.display = currentUser ? '' : 'none';
+  hideTooltip();
   filtered.forEach(i => {
     const rarityColor = RARITY_COLORS[i.rarity] || '#9a9ea8';
     const isNew = isItemNew(i);
@@ -694,14 +718,16 @@ function render() {
       const d = i.borrowed_at ? new Date(i.borrowed_at).toLocaleDateString() : '';
       statusTitle = `Rented to ${i.borrower_name}${d ? ' on ' + d : ''}`;
     }
-    let actionsHtml = '';
+    let actionsCell = '';
     if (currentUser) {
+      let actionsHtml = '';
       if (i.status === 'available' && i.owner_id !== currentUser.id) {
         actionsHtml += `<button class="rowbtn" data-action="borrow" data-id="${i.id}">Borrow</button>`;
       }
       if (i.owner_id === currentUser.id || currentUser.officer) {
         actionsHtml += `<button class="rowbtn danger" data-action="remove" data-id="${i.id}">Remove</button>`;
       }
+      actionsCell = `<td><div class="rowbtns">${actionsHtml}</div></td>`;
     }
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -711,15 +737,16 @@ function render() {
       <td class="muted">${i.owner_name || ''}</td>
       <td><div class="affixlist">${(i.affixes || []).map(a => `<span class="affix">${a}</span>`).join('')}</div></td>
       <td><span class="status" ${statusTitle ? `data-tooltip="${statusTitle}"` : ''}><span class="dot" style="background:${statusColor}"></span>${statusLabel}</span></td>
-      <td><div class="rowbtns">${actionsHtml}</div></td>
+      ${actionsCell}
     `;
     if (statusTitle) {
       const statusEl = tr.querySelector('.status');
       statusEl.addEventListener('click', (e) => {
         e.stopPropagation();
-        const wasOpen = statusEl.classList.contains('show-tip');
-        document.querySelectorAll('.status.show-tip').forEach(el => el.classList.remove('show-tip'));
-        if (!wasOpen) statusEl.classList.add('show-tip');
+        const isOpen = tooltipEl.style.display === 'block' && tooltipEl.dataset.owner === i.id;
+        if (isOpen) { hideTooltip(); return; }
+        tooltipEl.dataset.owner = i.id;
+        showTooltip(statusEl, statusTitle);
       });
     }
     tr.querySelectorAll('[data-action]').forEach(btn => {
@@ -754,8 +781,12 @@ function render() {
   });
 }
 
+document.querySelector('.tablewrap').addEventListener('scroll', hideTooltip);
+window.addEventListener('scroll', hideTooltip, true);
+window.addEventListener('resize', hideTooltip);
+
 document.addEventListener('click', () => {
-  document.querySelectorAll('.status.show-tip').forEach(el => el.classList.remove('show-tip'));
+  hideTooltip();
 });
 
 (async function init() {

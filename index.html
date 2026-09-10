@@ -148,6 +148,43 @@
   .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
   .btn-cancel { background: var(--bg); border: 1px solid var(--border); color: var(--text); }
   .modal-error { color: #f87171; font-size: 13px; margin-top: 10px; display: none; }
+
+  /* Live item preview card - layout/positioning copied from the in-game tooltip,
+     but colors stay on our existing --bg/--surface/--border/--accent palette */
+  #previewCard {
+    display: none; margin: 0 0 22px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden;
+  }
+  #previewCard.show { display: block; }
+  .pc-header { display: flex; gap: 14px; padding: 16px; }
+  .pc-icon-wrap { position: relative; width: 60px; height: 60px; flex-shrink: 0; }
+  .pc-icon {
+    width: 100%; height: 100%; border-radius: 8px; border: 1px solid var(--border);
+    object-fit: contain; background: var(--surface); padding: 4px; box-sizing: border-box;
+  }
+  .pc-lv {
+    position: absolute; bottom: -5px; right: -5px; background: #000; color: var(--text);
+    font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 5px;
+    border: 1px solid var(--border); line-height: 1.4;
+  }
+  .pc-title { min-width: 0; }
+  .pc-name { font-weight: 600; font-size: 16px; line-height: 1.3; word-break: break-word; }
+  .pc-subtitle { color: var(--text-muted); font-size: 12px; margin-top: 3px; }
+  .pc-tabs { display: flex; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .pc-tab {
+    flex: 1; text-align: center; padding: 9px; font-size: 12px; font-weight: 600;
+    letter-spacing: .03em; color: var(--text-muted);
+  }
+  .pc-tab.active { color: var(--text); border-bottom: 2px solid var(--accent); margin-bottom: -1px; }
+  .pc-section { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .pc-section:last-child { border-bottom: none; }
+  .pc-section-label {
+    font-size: 10px; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: .05em; margin-bottom: 8px;
+  }
+  .pc-row { display: flex; justify-content: space-between; align-items: center; font-size: 14px; padding: 3px 0; }
+  .pc-row .pc-val { font-weight: 600; }
+  .pc-row .pc-val.pc-val-green { color: #4ade80; }
   .back-to-top {
     position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
     width: 44px; height: 44px; background: var(--surface);
@@ -248,6 +285,35 @@
 
     <label>Paste item stats (optional)</label>
     <textarea id="modalPasteBox" class="paste-box" rows="1" placeholder="Paste copied item stats here to auto-fill..."></textarea>
+
+    <div id="previewCard">
+      <div class="pc-header">
+        <div class="pc-icon-wrap">
+          <img class="pc-icon" id="pcIcon" src="" alt="">
+          <span class="pc-lv" id="pcLv"></span>
+        </div>
+        <div class="pc-title">
+          <div class="pc-name" id="pcName"></div>
+          <div class="pc-subtitle" id="pcSubtitle"></div>
+        </div>
+      </div>
+      <div class="pc-tabs">
+        <div class="pc-tab active">EQUIP</div>
+        <div class="pc-tab">VENDOR</div>
+      </div>
+      <div class="pc-section">
+        <div class="pc-section-label">Requirements</div>
+        <div class="pc-row"><span>Combat Level</span><span class="pc-val pc-val-green" id="pcLevel"></span></div>
+      </div>
+      <div class="pc-section" id="pcEffectsSection" style="display:none;">
+        <div class="pc-section-label">Effects</div>
+        <div id="pcEffects"></div>
+      </div>
+      <div class="pc-section" id="pcAffixesSection" style="display:none;">
+        <div class="pc-section-label">Affixes</div>
+        <div id="pcAffixes"></div>
+      </div>
+    </div>
 
     <label>Item</label>
     <input type="text" id="modalItemInput" list="modalItemList" placeholder="Start typing an item name...">
@@ -582,6 +648,135 @@ document.getElementById('mineBtn').onclick = () => {
   render();
 };
 
+// -- Live item preview card ----------------------------------------------------------------
+// Best-effort mapping from an item's name/category/classes to its real CDN icon URL. Confirmed
+// against real assets for Rings/Amulets/Tools/Bow/Staff/Forging/Tailoring-armor/Leatherworking-armor.
+// Any wrong guess falls back to PLACEHOLDER_ICON via the <img> onerror handler below - never a
+// broken image, worst case it just shows the generic diamond icon.
+const PLACEHOLDER_ICON = "data:image/svg+xml;utf8," + encodeURIComponent(
+  "<svg xmlns='http://www.w3.org/2000/svg' width='60' height='60'><rect width='60' height='60' rx='8' fill='#161922'/><path d='M20 40 L30 20 L40 40 Z' fill='#2a2e3a'/></svg>"
+);
+
+const TOOL_FOLDERS_ICON = {
+  Pickaxe: "Pickaxes", Axe: "Axes", Trap: "Traps",
+  "Fishing Rod": "Fishingrods", Basket: "Baskets", Pouch: "Pouches",
+};
+// Shadowhide/Dragonhide/Abyssal drop "Leather" in the display name, but the asset filename keeps
+// it (and drops "hide") - e.g. "Shadowhide Boots" -> shadowleatherboots.png, not shadowhideboots.png.
+const LEATHER_TOP3_TIER = { Shadowhide: "shadow", Dragonhide: "dragon", Abyssal: "abyssal" };
+const ICON_SLUG_OVERRIDES = { "Leather Bow": "t1leatherworkingbow" };
+const ICON_TYPO_FIX = { "abyssalleatherbodyarmor": "abyysalleatherbodyarmor" }; // known CDN typo
+
+function iconSlugify(s) { return s.replace(/\s+/g, '').toLowerCase(); }
+
+function iconArchetype(classes) {
+  if (!classes) return null;
+  if (classes.includes('All')) return 'Accessory';
+  if (classes.includes('Guardian') || classes.includes('Berserker')) return 'Warrior';
+  if (classes.includes('Sniper') || classes.includes('Assassin')) return 'Ranger';
+  if (classes.includes('Archmage') || classes.includes('Spellblade')) return 'Mage';
+  return null;
+}
+
+function getIconUrl(item) {
+  if (!item) return null;
+  const { name, category, classes } = item;
+  if (category === 'Ring' || category === 'Amulet') {
+    return `https://cdn.degenidle.com/Crafting/Accessories/${iconSlugify(name)}.png`;
+  }
+  if (TOOL_FOLDERS_ICON[category]) {
+    return `https://cdn.degenidle.com/Crafting/Tools/${TOOL_FOLDERS_ICON[category]}/${iconSlugify(name)}.png`;
+  }
+  if (category === 'Bow') {
+    const slug = ICON_SLUG_OVERRIDES[name] || iconSlugify(name);
+    return `https://cdn.degenidle.com/Crafting/Bow/${slug}.png`;
+  }
+  if (category === 'Staff') {
+    return `https://cdn.degenidle.com/Crafting/Staff/${iconSlugify(name)}.png`;
+  }
+  const arch = iconArchetype(classes);
+  if (arch === 'Warrior') {
+    const folder = (category === 'Sword' || category === 'Shield') ? 'Weapons' : 'Armor';
+    return `https://cdn.degenidle.com/Blacksmithing/${folder}/${iconSlugify(name)}.png`;
+  }
+  if (arch === 'Mage') {
+    // The "Mystic" display tier's real asset word is "Celestial" for every Tailoring armor piece
+    // except Staff (Staff keeps the literal "Mystweave" name, handled above already).
+    const n = /^Mystic\b/.test(name) ? name.replace(/^Mystic/, 'Celestial') : name;
+    return `https://cdn.degenidle.com/Tailoring/Armor/${iconSlugify(n)}.png`;
+  }
+  if (arch === 'Ranger') {
+    const top3 = Object.keys(LEATHER_TOP3_TIER).find(t => name.startsWith(t));
+    let slug = top3
+      ? iconSlugify(`${LEATHER_TOP3_TIER[top3]}leather${category}`)
+      : iconSlugify(name);
+    slug = ICON_TYPO_FIX[slug] || slug;
+    return `https://cdn.degenidle.com/Leatherworking/Armor/${slug}.png`;
+  }
+  return null;
+}
+
+const PROFESSION_LABEL = { Warrior: 'Forging', Ranger: 'Leatherworking', Mage: 'Tailoring', Accessory: 'Crafting' };
+
+let lastParsedEffects = [];      // [{name, value}] from the most recent successful paste - display only
+let lastParsedAffixValues = {};  // { affixName: value } from the most recent successful paste - display only
+
+document.getElementById('pcIcon').onerror = function () { this.onerror = null; this.src = PLACEHOLDER_ICON; };
+
+function renderPreviewCard() {
+  const card = document.getElementById('previewCard');
+  const itemName = document.getElementById('modalItemInput').value;
+  const entry = modalItemMap[itemName];
+  if (!entry) { card.classList.remove('show'); return; }
+
+  const rarity = document.getElementById('modalRarity').value;
+
+  document.getElementById('pcIcon').src = getIconUrl(entry) || PLACEHOLDER_ICON;
+  document.getElementById('pcLv').textContent = `Lv.${entry.level}`;
+  document.getElementById('pcName').textContent = entry.name;
+  document.getElementById('pcName').style.color = RARITY_COLORS[rarity] || 'var(--text)';
+
+  const arch = iconArchetype(entry.classes) || 'Accessory';
+  const profession = PROFESSION_LABEL[arch] || 'Crafting';
+  document.getElementById('pcSubtitle').textContent = `${rarity} ${entry.category} \u00B7 ${profession} Lv. ${entry.level}`;
+  document.getElementById('pcLevel').textContent = entry.level;
+
+  const effSection = document.getElementById('pcEffectsSection');
+  const effEl = document.getElementById('pcEffects');
+  if (lastParsedEffects.length) {
+    effEl.innerHTML = '';
+    lastParsedEffects.forEach(p => {
+      const row = document.createElement('div');
+      row.className = 'pc-row';
+      const val = p.value ? '+' + p.value.replace(/^\+/, '') : '';
+      row.innerHTML = `<span>${p.name}</span><span class="pc-val">${val}</span>`;
+      effEl.appendChild(row);
+    });
+    effSection.style.display = 'block';
+  } else {
+    effSection.style.display = 'none';
+  }
+
+  const affSection = document.getElementById('pcAffixesSection');
+  const affEl = document.getElementById('pcAffixes');
+  if (modalSelectedAffixes.size) {
+    affEl.innerHTML = '';
+    [...modalSelectedAffixes].forEach(name => {
+      const row = document.createElement('div');
+      row.className = 'pc-row';
+      const raw = lastParsedAffixValues[name];
+      const val = raw ? '+' + raw.replace(/^\+/, '') : '';
+      row.innerHTML = `<span>${name}</span><span class="pc-val">${val}</span>`;
+      affEl.appendChild(row);
+    });
+    affSection.style.display = 'block';
+  } else {
+    affSection.style.display = 'none';
+  }
+
+  card.classList.add('show');
+}
+
 // -- Add Item modal -----------------------------------------------------------------------
 let itemMasterCache = null;
 let modalSelectedAffixes = new Set();
@@ -622,6 +817,9 @@ async function openAddModal() {
   document.getElementById('modalItemInput').value = '';
   document.getElementById('modalError').style.display = 'none';
   modalSelectedAffixes.clear();
+  lastParsedEffects = [];
+  lastParsedAffixValues = {};
+  document.getElementById('previewCard').classList.remove('show');
   buildModalAffixes(master);
   document.getElementById('addModalBg').style.display = 'flex';
   document.getElementById('modalPasteBox').focus();
@@ -634,7 +832,7 @@ function buildModalAffixes(master) {
   const entry = modalItemMap[document.getElementById('modalItemInput').value];
   const rarity = document.getElementById('modalRarity').value;
   const pool = entry ? (master.affixPools[entry.category] || []) : [];
-  if (!entry || pool.length === 0) { wrap.style.display = 'none'; return; }
+  if (!entry || pool.length === 0) { wrap.style.display = 'none'; renderPreviewCard(); return; }
   wrap.style.display = 'block';
   const cap = master.rarityAffixCap[rarity] || 4;
   pool.forEach(a => {
@@ -646,9 +844,11 @@ function buildModalAffixes(master) {
     btn.onclick = () => {
       if (modalSelectedAffixes.has(a)) { modalSelectedAffixes.delete(a); btn.classList.remove('active'); }
       else if (modalSelectedAffixes.size < cap) { modalSelectedAffixes.add(a); btn.classList.add('active'); }
+      renderPreviewCard();
     };
     affixEl.appendChild(btn);
   });
+  renderPreviewCard();
 }
 
 // Parses text copied straight from the game's item tooltip, e.g.:
@@ -662,6 +862,29 @@ function buildModalAffixes(master) {
 //   Health on Crit
 //   +4.95
 //   Compare vs Equipped
+// Pulls {name, value} pairs out of a block of pasted lines. Handles both paste formats seen in
+// the wild: value on its own line right after the name, or value glued onto the end of the same
+// line (e.g. "Combat Level80", "Attack Power+6.60") - depends on how the browser serializes the copy.
+function extractStatPairs(rawLines, startIdx, endIdx) {
+  const pairs = [];
+  let i = startIdx;
+  while (i < endIdx) {
+    const line = rawLines[i];
+    const embedded = line.match(/^(.*?)\s*([+-]?\d+(?:\.\d+)?)\s*$/);
+    if (embedded && embedded[1].trim()) {
+      pairs.push({ name: embedded[1].trim(), value: embedded[2] });
+      i++;
+    } else if (i + 1 < endIdx && /^[+-]?\d+(?:\.\d+)?$/.test(rawLines[i + 1])) {
+      pairs.push({ name: line, value: rawLines[i + 1] });
+      i += 2;
+    } else {
+      pairs.push({ name: line, value: null });
+      i++;
+    }
+  }
+  return pairs;
+}
+
 function parseItemPaste(text, master) {
   const rawLines = text.split('\n').map(l => l.trim()).filter(Boolean);
   if (!rawLines.length) return null;
@@ -684,18 +907,27 @@ function parseItemPaste(text, master) {
     if (foundName) { itemName = foundName; break; }
   }
 
-  const affixNames = [];
+  const effIdx = rawLines.findIndex(l => /^effects$/i.test(l));
   const affixIdx = rawLines.findIndex(l => /^affixes$/i.test(l));
-  if (affixIdx !== -1) {
-    for (let i = affixIdx + 1; i < rawLines.length; i++) {
-      const line = rawLines[i];
-      if (/^compare\b/i.test(line)) break;
-      if (/^[+-]?\d/.test(line)) continue;
-      affixNames.push(line);
-    }
+  const compareIdx = rawLines.findIndex(l => /^compare\b/i.test(l));
+
+  let effects = [];
+  if (effIdx !== -1) {
+    const end = affixIdx !== -1 ? affixIdx : (compareIdx !== -1 ? compareIdx : rawLines.length);
+    effects = extractStatPairs(rawLines, effIdx + 1, end);
   }
 
-  return { rarity, itemName, affixNames };
+  const affixNames = [];
+  const affixValues = {};
+  if (affixIdx !== -1) {
+    const end = compareIdx !== -1 ? compareIdx : rawLines.length;
+    extractStatPairs(rawLines, affixIdx + 1, end).forEach(p => {
+      affixNames.push(p.name);
+      if (p.value) affixValues[p.name] = p.value;
+    });
+  }
+
+  return { rarity, itemName, affixNames, affixValues, effects };
 }
 
 async function handlePastedStats(text) {
@@ -705,6 +937,8 @@ async function handlePastedStats(text) {
   if (parsed.itemName) document.getElementById('modalItemInput').value = parsed.itemName;
   if (parsed.rarity) document.getElementById('modalRarity').value = parsed.rarity;
   modalSelectedAffixes.clear();
+  lastParsedEffects = parsed.effects || [];
+  lastParsedAffixValues = parsed.affixValues || {};
   if (parsed.itemName && parsed.affixNames.length) {
     const entry = modalItemMap[parsed.itemName];
     const pool = master.affixPools[entry.category] || [];

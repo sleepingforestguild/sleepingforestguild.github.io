@@ -104,12 +104,17 @@
     <button class="reset" id="resetBtn">Reset</button>
   </div>
 
-  <p class="label">Class</p>
-  <div class="pillrow" id="classes"></div>
+  <p class="label">Type</p>
+  <div class="pillrow" id="types"></div>
 
-  <div id="catWrap" style="display:none;">
+  <div id="classWrap" style="display:none;">
+    <p class="label">Class</p>
+    <div class="pillrow" id="classes"></div>
+  </div>
+
+  <div id="toolCatWrap" style="display:none;">
     <p class="label">Category</p>
-    <div class="pillrow" id="categories"></div>
+    <div class="pillrow" id="toolCats"></div>
   </div>
 
   <div id="detailWrap" style="display:none;">
@@ -150,21 +155,30 @@ const RARITY_COLORS = {
   Legendary: "#fb923c", Mythic: "#f472b6"
 };
 
-const classesList = ["Archmage","Spellblade","Sniper","Assassin","Guardian","Berserker","Tools"];
-const weaponsByClass = {
-  Archmage: ["Staff"], Spellblade: ["Sword","Shield"], Sniper: ["Bow"],
-  Assassin: ["Sword"], Guardian: ["Sword","Shield"], Berserker: ["Sword"]
+const CLASS_LIST = ["Archmage","Spellblade","Sniper","Assassin","Guardian","Berserker"];
+
+// Each Type maps to one or more real game "category" values.
+// needsClass: true  -> pick a class first (item's real category depends on class, e.g. mage Bodyarmor = "Robe")
+// needsClass: false -> category is fixed, skip straight to Level/Affixes
+// isTools: true     -> pick one of the 6 tool categories first
+const TYPE_CONFIG = {
+  Helmet:    { needsClass: true, categories: ["Helmet","Hat"],
+               classCategory: { Guardian:"Helmet", Berserker:"Helmet", Sniper:"Hat", Assassin:"Hat", Archmage:"Hat", Spellblade:"Hat" } },
+  Bodyarmor: { needsClass: true, categories: ["Bodyarmor","Robe"],
+               classCategory: { Guardian:"Bodyarmor", Berserker:"Bodyarmor", Sniper:"Bodyarmor", Assassin:"Bodyarmor", Archmage:"Robe", Spellblade:"Robe" } },
+  Gloves:    { needsClass: true, categories: ["Gloves"],
+               classCategory: { Guardian:"Gloves", Berserker:"Gloves", Sniper:"Gloves", Assassin:"Gloves", Archmage:"Gloves", Spellblade:"Gloves" } },
+  Boots:     { needsClass: true, categories: ["Boots","Shoes"],
+               classCategory: { Guardian:"Boots", Berserker:"Boots", Sniper:"Boots", Assassin:"Boots", Archmage:"Shoes", Spellblade:"Shoes" } },
+  Sword:     { needsClass: false, categories: ["Sword"] },
+  Shield:    { needsClass: false, categories: ["Shield"] },
+  Bow:       { needsClass: false, categories: ["Bow"] },
+  Staff:     { needsClass: false, categories: ["Staff"] },
+  Ring:      { needsClass: false, categories: ["Ring"] },
+  Amulet:    { needsClass: false, categories: ["Amulet"] },
+  Tools:     { isTools: true, categories: ["Pickaxe","Axe","Pouch","Basket","Trap","Fishing Rod"] },
 };
-const toolCategories = ["Pickaxe","Axe","Pouch","Basket","Trap","Fishing Rod"];
-const armorCatsByClass = {
-  Archmage: ["Hat","Robe","Gloves","Shoes"],
-  Spellblade: ["Hat","Robe","Gloves","Shoes"],
-  Sniper: ["Hat","Bodyarmor","Gloves","Boots"],
-  Assassin: ["Hat","Bodyarmor","Gloves","Boots"],
-  Guardian: ["Helmet","Bodyarmor","Gloves","Boots"],
-  Berserker: ["Helmet","Bodyarmor","Gloves","Boots"],
-};
-const universalCats = ["Ring","Amulet"];
+const TYPES = Object.keys(TYPE_CONFIG);
 
 const affixPools = {
   Helmet: ["Max Health","Max Energy","Attack Power","Critical Chance","Critical Damage","Defense Penetration","Resource Efficiency","Damage Reflect","Health on Crit","Energy on Dodge"],
@@ -185,53 +199,97 @@ const affixPools = {
 const RARITY_ORDER = ["Uncommon","Rare","Epic","Legendary","Mythic"];
 
 let items = [];
-let selClass = null, selCategory = null, selLevel = null;
+let selType = null, selClass = null, selToolCat = null, selLevel = null;
 const selAffixes = new Set();
 
-const classEl = document.getElementById('classes');
-classesList.forEach(c => {
+// Does item i belong to the current Type/Class/ToolCat selection? (level/affix not considered here)
+function itemMatchesFilters(i) {
+  if (!selType) return true;
+  const cfg = TYPE_CONFIG[selType];
+  if (cfg.isTools) {
+    if (!cfg.categories.includes(i.category)) return false;
+    if (selToolCat && i.category !== selToolCat) return false;
+    return true;
+  }
+  if (cfg.needsClass) {
+    if (!cfg.categories.includes(i.category)) return false;
+    if (selClass) {
+      if (i.category !== cfg.classCategory[selClass]) return false;
+      if (!(i.classes || []).includes(selClass)) return false;
+    }
+    return true;
+  }
+  return cfg.categories.includes(i.category);
+}
+
+// The single real "category" value once fully resolved, or null if not yet resolved
+function resolvedCategory() {
+  if (!selType) return null;
+  const cfg = TYPE_CONFIG[selType];
+  if (cfg.isTools) return selToolCat;
+  if (cfg.needsClass) return selClass ? cfg.classCategory[selClass] : null;
+  return cfg.categories[0];
+}
+
+const typeEl = document.getElementById('types');
+TYPES.forEach(t => {
   const btn = document.createElement('button');
   btn.className = 'pill';
-  btn.textContent = c;
+  btn.textContent = t;
   btn.onclick = () => {
-    selClass = selClass === c ? null : c;
-    selCategory = null; selLevel = null; selAffixes.clear();
-    [...classEl.children].forEach(b => b.classList.remove('active'));
-    if (selClass) btn.classList.add('active');
-    buildCategories(); buildLevels(); buildAffixes(); render();
+    selType = selType === t ? null : t;
+    selClass = null; selToolCat = null; selLevel = null; selAffixes.clear();
+    [...typeEl.children].forEach(b => b.classList.remove('active'));
+    if (selType) btn.classList.add('active');
+    buildClassWrap(); buildToolCatWrap(); buildLevels(); buildAffixes(); render();
   };
-  classEl.appendChild(btn);
+  typeEl.appendChild(btn);
 });
 
-function buildCategories() {
-  const wrap = document.getElementById('catWrap');
-  const catEl = document.getElementById('categories');
-  catEl.innerHTML = '';
-  if (!selClass) { wrap.style.display = 'none'; return; }
+function buildClassWrap() {
+  const wrap = document.getElementById('classWrap');
+  const classEl = document.getElementById('classes');
+  classEl.innerHTML = '';
+  const cfg = selType ? TYPE_CONFIG[selType] : null;
+  if (!cfg || !cfg.needsClass) { wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
-  const cats = selClass === 'Tools' ? toolCategories : [...armorCatsByClass[selClass], ...universalCats, ...weaponsByClass[selClass]];
-  cats.forEach(cat => {
+  CLASS_LIST.forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = 'pill small';
+    btn.textContent = c;
+    btn.onclick = () => {
+      selClass = selClass === c ? null : c;
+      selLevel = null; selAffixes.clear();
+      [...classEl.children].forEach(b => b.classList.remove('active'));
+      if (selClass) btn.classList.add('active');
+      buildLevels(); buildAffixes(); render();
+    };
+    classEl.appendChild(btn);
+  });
+}
+
+function buildToolCatWrap() {
+  const wrap = document.getElementById('toolCatWrap');
+  const tcEl = document.getElementById('toolCats');
+  tcEl.innerHTML = '';
+  const cfg = selType ? TYPE_CONFIG[selType] : null;
+  if (!cfg || !cfg.isTools) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  cfg.categories.forEach(cat => {
     const btn = document.createElement('button');
     btn.className = 'pill small';
     btn.textContent = cat;
     btn.onclick = () => {
-      selCategory = selCategory === cat ? null : cat;
+      selToolCat = selToolCat === cat ? null : cat;
       selLevel = null; selAffixes.clear();
-      [...catEl.children].forEach(b => b.classList.remove('active'));
-      if (selCategory) btn.classList.add('active');
+      [...tcEl.children].forEach(b => b.classList.remove('active'));
+      if (selToolCat) btn.classList.add('active');
       buildLevels(); buildAffixes(); render();
     };
-    catEl.appendChild(btn);
+    tcEl.appendChild(btn);
   });
 }
 
-// Items matching the currently selected class + category (used to derive level pills)
-function itemsInScope() {
-  return items.filter(i =>
-    (!selClass || (i.classes || []).includes(selClass) || (i.classes || []).includes('All')) &&
-    (!selCategory || i.category === selCategory)
-  );
-}
 
 // Turns "Copper Helmet" + category "Helmet" into tier label "Copper"
 function tierLabel(name, cat) {
@@ -251,10 +309,11 @@ function buildLevels() {
   const wrap = document.getElementById('levelWrap');
   const levelEl = document.getElementById('levels');
   levelEl.innerHTML = '';
-  if (!selCategory) { wrap.style.display = 'none'; updateDetailWrapVisibility(); return; }
+  const cat = resolvedCategory();
+  if (!cat) { wrap.style.display = 'none'; updateDetailWrapVisibility(); return; }
   const seen = new Map();
-  itemsInScope().forEach(i => {
-    if (!seen.has(i.level)) seen.set(i.level, tierLabel(i.name, selCategory));
+  items.filter(itemMatchesFilters).forEach(i => {
+    if (!seen.has(i.level)) seen.set(i.level, tierLabel(i.name, cat));
   });
   const tiers = [...seen.entries()].sort((a, b) => b[0] - a[0]);
   if (tiers.length < 2) { wrap.style.display = 'none'; updateDetailWrapVisibility(); return; }
@@ -278,8 +337,9 @@ function buildAffixes() {
   const wrap = document.getElementById('affixWrap');
   const affixEl = document.getElementById('affixes');
   affixEl.innerHTML = '';
-  const pool = affixPools[selCategory] || [];
-  if (!selCategory || pool.length === 0) { wrap.style.display = 'none'; updateDetailWrapVisibility(); return; }
+  const cat = resolvedCategory();
+  const pool = affixPools[cat] || [];
+  if (!cat || pool.length === 0) { wrap.style.display = 'none'; updateDetailWrapVisibility(); return; }
   wrap.style.display = 'block';
   pool.forEach(a => {
     const btn = document.createElement('button');
@@ -296,10 +356,10 @@ function buildAffixes() {
 }
 
 document.getElementById('resetBtn').onclick = () => {
-  selClass = null; selCategory = null; selLevel = null; selAffixes.clear();
+  selType = null; selClass = null; selToolCat = null; selLevel = null; selAffixes.clear();
   document.getElementById('search').value = '';
-  [...classEl.children].forEach(b => b.classList.remove('active'));
-  buildCategories(); buildLevels(); buildAffixes(); render();
+  [...typeEl.children].forEach(b => b.classList.remove('active'));
+  buildClassWrap(); buildToolCatWrap(); buildLevels(); buildAffixes(); render();
 };
 document.getElementById('search').addEventListener('input', render);
 
@@ -333,8 +393,7 @@ function render() {
   const q = document.getElementById('search').value.toLowerCase();
   const filtered = items.filter(i =>
     i.name.toLowerCase().includes(q) &&
-    (!selClass || (i.classes || []).includes(selClass) || (i.classes || []).includes('All')) &&
-    (!selCategory || i.category === selCategory) &&
+    itemMatchesFilters(i) &&
     (selLevel === null || i.level === selLevel) &&
     [...selAffixes].every(a => (i.affixes || []).includes(a))
   ).sort((a, b) => {

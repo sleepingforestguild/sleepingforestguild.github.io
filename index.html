@@ -45,7 +45,7 @@
     text-transform: uppercase; letter-spacing: .04em; white-space: nowrap;
   }
   tbody td { padding: 14px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-  .tablewrap { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow-x: auto; }
+  .tablewrap { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: visible; }
   .itemname { display: flex; align-items: center; gap: 9px; font-weight: 500; font-size: 16px; white-space: nowrap; }
   .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
   .muted { color: var(--text-secondary); white-space: nowrap; }
@@ -63,10 +63,6 @@
     font-size: 12px; white-space: nowrap; z-index: 10;
     box-shadow: 0 4px 12px rgba(0,0,0,.5);
   }
-  .tablewrap::-webkit-scrollbar { height: 8px; }
-  .tablewrap::-webkit-scrollbar-track { background: var(--surface); }
-  .tablewrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-  .tablewrap { scrollbar-width: thin; scrollbar-color: var(--border) var(--surface); }
   .empty { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 15px; }
   .loading { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 15px; }
 </style>
@@ -227,8 +223,7 @@ function render() {
     const statusLabel = i.status ? i.status.charAt(0).toUpperCase() + i.status.slice(1) : 'Unknown';
     let statusTitle = '';
     if (i.status === 'rented' && i.borrower_name) {
-      const d = i.borrowed_at ? new Date(i.borrowed_at).toLocaleDateString() : '';
-      statusTitle = `Borrowed by ${i.borrower_name}${d ? ' on ' + d : ''}`;
+      statusTitle = `Rented to ${i.borrower_name}`;
     }
     const tr = document.createElement('tr');
     tr.innerHTML = `

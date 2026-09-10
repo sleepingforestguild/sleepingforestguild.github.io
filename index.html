@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SleepingForest Community Chest</title>
 <link rel="icon" type="image/png" href="favicon.png">
+<link rel="shortcut icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="favicon.png">
 <style>
   :root {
     --bg: #0d0f14; --surface: #161922; --border: #2a2e3a;
@@ -47,7 +49,7 @@
   }
   tbody td { padding: 14px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
   .tablewrap { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: visible; }
-  .itemname { display: flex; align-items: center; gap: 9px; font-weight: 500; font-size: 16px; white-space: nowrap; }
+  .itemname { display: flex; align-items: center; gap: 9px; font-weight: 500; font-size: 16px; flex-wrap: wrap; }
   .newbadge {
     font-size: 10px; font-weight: 600; background: var(--accent); color: #0d0f14;
     padding: 2px 7px; border-radius: 5px; letter-spacing: .03em; text-transform: uppercase;
@@ -150,7 +152,7 @@ const weaponsByClass = {
 const toolCategories = ["Pickaxe","Axe","Pouch","Basket","Trap","Fishing Rod"];
 const armorCatsByClass = {
   Archmage: ["Hat","Robe","Gloves","Shoes"],
-  Spellblade: ["Helmet","Bodyarmor","Gloves","Boots"],
+  Spellblade: ["Hat","Robe","Gloves","Shoes"],
   Sniper: ["Hat","Bodyarmor","Gloves","Boots"],
   Assassin: ["Hat","Bodyarmor","Gloves","Boots"],
   Guardian: ["Helmet","Bodyarmor","Gloves","Boots"],
@@ -243,6 +245,10 @@ document.getElementById('resetBtn').onclick = () => {
 };
 document.getElementById('search').addEventListener('input', render);
 
+function isItemNew(i) {
+  return !!(i.added_at && (Date.now() - new Date(i.added_at).getTime()) < 24 * 60 * 60 * 1000);
+}
+
 function render() {
   const q = document.getElementById('search').value.toLowerCase();
   const filtered = items.filter(i =>
@@ -250,13 +256,19 @@ function render() {
     (!selClass || (i.classes || []).includes(selClass) || (i.classes || []).includes('All')) &&
     (!selCategory || i.category === selCategory) &&
     [...selAffixes].every(a => (i.affixes || []).includes(a))
-  ).sort((a, b) => new Date(b.added_at || 0) - new Date(a.added_at || 0));
+  ).sort((a, b) => {
+    const aNew = isItemNew(a), bNew = isItemNew(b);
+    if (aNew !== bNew) return aNew ? -1 : 1;
+    const aRented = a.status === 'rented', bRented = b.status === 'rented';
+    if (aRented !== bRented) return aRented ? 1 : -1;
+    return (b.level || 0) - (a.level || 0);
+  });
   const rows = document.getElementById('rows');
   rows.innerHTML = '';
   document.getElementById('empty').style.display = filtered.length ? 'none' : 'block';
   filtered.forEach(i => {
     const rarityColor = RARITY_COLORS[i.rarity] || '#9a9ea8';
-    const isNew = i.added_at && (Date.now() - new Date(i.added_at).getTime()) < 24 * 60 * 60 * 1000;
+    const isNew = isItemNew(i);
     const statusColor = i.status === 'available' ? '#4ade80' : '#f87171';
     const statusLabel = i.status ? i.status.charAt(0).toUpperCase() + i.status.slice(1) : 'Unknown';
     let statusTitle = '';

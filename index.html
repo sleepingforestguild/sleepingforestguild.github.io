@@ -41,7 +41,7 @@
   .pill:hover { border-color: var(--accent); }
   .pill.active { background: rgba(124,140,248,.15); border-color: var(--accent); color: var(--accent); }
   .pill.small { font-size: 14px; padding: 6px 14px; }
-  table { width: 100%; border-collapse: collapse; font-size: 15px; table-layout: fixed; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; table-layout: auto; }
   thead th {
     text-align: left; padding: 14px 16px; color: var(--text-muted);
     border-bottom: 1px solid var(--border); font-weight: 500; font-size: 12px;
@@ -49,9 +49,8 @@
   }
   tbody td { padding: 14px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
   .tablewrap { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: visible; }
-  .itemname { display: flex; align-items: center; gap: 9px; font-weight: 500; font-size: 16px; min-width: 0; }
-  .itemname .name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-  .newbadge { flex-shrink: 0; }
+  .itemname { display: flex; align-items: center; gap: 9px; font-weight: 500; font-size: 16px; white-space: nowrap; }
+  .newbadge { display: none; }
   .newbadge {
     font-size: 10px; font-weight: 600; background: var(--accent); color: #0d0f14;
     padding: 2px 7px; border-radius: 5px; letter-spacing: .03em; text-transform: uppercase;
@@ -62,7 +61,7 @@
     50% { opacity: .6; }
   }
   .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
-  .muted { color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .muted { color: var(--text-secondary); white-space: nowrap; }
   .affixlist { display: flex; flex-wrap: nowrap; gap: 6px; }
   .affix {
     font-size: 12px; background: var(--bg); padding: 4px 10px; border-radius: 7px;
@@ -93,6 +92,7 @@
     .tablewrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     table { min-width: 760px; }
     .status[data-tooltip]:hover::after { left: auto; right: 0; }
+    .newbadge { display: inline-block; }
   }
 </style>
 </head>
@@ -123,12 +123,12 @@
     <table>
       <thead>
         <tr>
-          <th style="width:22%">Item</th>
-          <th style="width:12%">Category</th>
-          <th style="width:16%">Class</th>
-          <th style="width:11%">Added by</th>
-          <th style="width:27%">Affixes</th>
-          <th style="width:12%">Status</th>
+          <th style="width:24%">Item</th>
+          <th style="width:14%">Category</th>
+          <th style="width:14%">Class</th>
+          <th style="width:13%">Added by</th>
+          <th style="width:24%">Affixes</th>
+          <th style="width:11%">Status</th>
         </tr>
       </thead>
       <tbody id="rows"></tbody>
@@ -247,6 +247,28 @@ document.getElementById('resetBtn').onclick = () => {
 };
 document.getElementById('search').addEventListener('input', render);
 
+function abbreviateClasses(classes) {
+  if (!classes || !classes.length) return '';
+  if (classes.includes('All')) return 'All';
+  const groups = [
+    { label: 'Mage', members: ['Archmage','Spellblade'] },
+    { label: 'Warrior', members: ['Guardian','Berserker'] },
+    { label: 'Ranger', members: ['Sniper','Assassin'] },
+  ];
+  let remaining = [...classes];
+  const output = [];
+  groups.forEach(g => {
+    if (g.members.every(m => remaining.includes(m))) {
+      output.push(g.label);
+      remaining = remaining.filter(c => !g.members.includes(c));
+    }
+  });
+  classes.forEach(c => {
+    if (remaining.includes(c)) { output.push(c); remaining = remaining.filter(x => x !== c); }
+  });
+  return output.join(', ');
+}
+
 function isItemNew(i) {
   return !!(i.added_at && (Date.now() - new Date(i.added_at).getTime()) < 24 * 60 * 60 * 1000);
 }
@@ -280,9 +302,9 @@ function render() {
     }
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td><span class="itemname"><span class="dot" style="background:${rarityColor}"></span><span class="name-text">${i.name}</span>${isNew ? '<span class="newbadge">New</span>' : ''}</span></td>
+      <td><span class="itemname"><span class="dot" style="background:${rarityColor}"></span>${i.name}${isNew ? '<span class="newbadge">New</span>' : ''}</span></td>
       <td class="muted">${i.category || ''}</td>
-      <td class="muted">${(i.classes || []).join(', ')}</td>
+      <td class="muted">${abbreviateClasses(i.classes)}</td>
       <td class="muted">${i.owner_name || ''}</td>
       <td><div class="affixlist">${(i.affixes || []).map(a => `<span class="affix">${a}</span>`).join('')}</div></td>
       <td><span class="status" ${statusTitle ? `data-tooltip="${statusTitle}"` : ''}><span class="dot" style="background:${statusColor}"></span>${statusLabel}</span></td>

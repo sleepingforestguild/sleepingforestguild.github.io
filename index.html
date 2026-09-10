@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SleepingForest Community Chest</title>
+<link rel="icon" type="image/png" href="favicon.png">
 <style>
   :root {
     --bg: #0d0f14; --surface: #161922; --border: #2a2e3a;
@@ -47,6 +48,15 @@
   tbody td { padding: 14px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
   .tablewrap { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: visible; }
   .itemname { display: flex; align-items: center; gap: 9px; font-weight: 500; font-size: 16px; white-space: nowrap; }
+  .newbadge {
+    font-size: 10px; font-weight: 600; background: var(--accent); color: #0d0f14;
+    padding: 2px 7px; border-radius: 5px; letter-spacing: .03em; text-transform: uppercase;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .6; }
+  }
   .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
   .muted { color: var(--text-secondary); white-space: nowrap; }
   .affixlist { display: flex; flex-wrap: nowrap; gap: 6px; }
@@ -138,14 +148,24 @@ const weaponsByClass = {
   Assassin: ["Sword"], Guardian: ["Sword","Shield"], Berserker: ["Sword"]
 };
 const toolCategories = ["Pickaxe","Axe","Pouch","Basket","Trap","Fishing Rod"];
-const armorCats = ["Helmet","Bodyarmor","Gloves","Boots"];
+const armorCatsByClass = {
+  Archmage: ["Hat","Robe","Gloves","Shoes"],
+  Spellblade: ["Helmet","Bodyarmor","Gloves","Boots"],
+  Sniper: ["Hat","Bodyarmor","Gloves","Boots"],
+  Assassin: ["Hat","Bodyarmor","Gloves","Boots"],
+  Guardian: ["Helmet","Bodyarmor","Gloves","Boots"],
+  Berserker: ["Helmet","Bodyarmor","Gloves","Boots"],
+};
 const universalCats = ["Ring","Amulet"];
 
 const affixPools = {
   Helmet: ["Max Health","Max Energy","Attack Power","Critical Chance","Critical Damage","Defense Penetration","Resource Efficiency","Damage Reflect","Health on Crit","Energy on Dodge"],
+  Hat: ["Max Health","Max Energy","Attack Power","Critical Chance","Critical Damage","Defense Penetration","Resource Efficiency","Damage Reflect","Health on Crit","Energy on Dodge"],
   Bodyarmor: ["Max Health","Max Energy","Defense","Defense Penetration","Resource Efficiency","Damage Reflect","Dodge","Health on Hit","Health on Dodge","Energy on Hit"],
+  Robe: ["Max Health","Max Energy","Defense","Defense Penetration","Resource Efficiency","Damage Reflect","Dodge","Health on Hit","Health on Dodge","Energy on Hit"],
   Gloves: ["Attack Power","Attack Speed","Critical Chance","Critical Damage","Defense Penetration","Resource Efficiency","Health on Hit","Health on Crit","Energy on Hit","Energy on Crit"],
   Boots: ["Max Health","Max Energy","Attack Speed","Defense","Health on Dodge","Health on Crit","Energy on Crit","Energy on Dodge","Dodge","Critical Damage"],
+  Shoes: ["Max Health","Max Energy","Attack Speed","Defense","Health on Dodge","Health on Crit","Energy on Crit","Energy on Dodge","Dodge","Critical Damage"],
   Ring: ["Max Health","Max Energy","Attack Power","Defense","Critical Damage","Defense Penetration","Resource Efficiency","Health on Hit","Health on Crit","Energy on Hit","Drop Chance","Gold Find"],
   Amulet: ["Max Health","Max Energy","Defense","Resource Efficiency","Damage Reflect","Health on Crit","Health on Dodge","Health on Block","Energy on Block","Perfect Block","Combat XP","Pet XP"],
   Shield: ["Max Health","Max Energy","Attack Power","Defense","Resource Efficiency","Damage Reflect","Block Chance","Perfect Block","Health on Block","Energy on Block"],
@@ -179,7 +199,7 @@ function buildCategories() {
   catEl.innerHTML = '';
   if (!selClass) { wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
-  const cats = selClass === 'Tools' ? toolCategories : [...armorCats, ...universalCats, ...weaponsByClass[selClass]];
+  const cats = selClass === 'Tools' ? toolCategories : [...armorCatsByClass[selClass], ...universalCats, ...weaponsByClass[selClass]];
   cats.forEach(cat => {
     const btn = document.createElement('button');
     btn.className = 'pill small';
@@ -199,9 +219,10 @@ function buildAffixes() {
   const wrap = document.getElementById('affixWrap');
   const affixEl = document.getElementById('affixes');
   affixEl.innerHTML = '';
-  if (!selCategory) { wrap.style.display = 'none'; return; }
+  const pool = affixPools[selCategory] || [];
+  if (!selCategory || pool.length === 0) { wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
-  (affixPools[selCategory] || []).forEach(a => {
+  pool.forEach(a => {
     const btn = document.createElement('button');
     btn.className = 'pill small';
     btn.textContent = a;
@@ -229,12 +250,13 @@ function render() {
     (!selClass || (i.classes || []).includes(selClass) || (i.classes || []).includes('All')) &&
     (!selCategory || i.category === selCategory) &&
     [...selAffixes].every(a => (i.affixes || []).includes(a))
-  );
+  ).sort((a, b) => new Date(b.added_at || 0) - new Date(a.added_at || 0));
   const rows = document.getElementById('rows');
   rows.innerHTML = '';
   document.getElementById('empty').style.display = filtered.length ? 'none' : 'block';
   filtered.forEach(i => {
     const rarityColor = RARITY_COLORS[i.rarity] || '#9a9ea8';
+    const isNew = i.added_at && (Date.now() - new Date(i.added_at).getTime()) < 24 * 60 * 60 * 1000;
     const statusColor = i.status === 'available' ? '#4ade80' : '#f87171';
     const statusLabel = i.status ? i.status.charAt(0).toUpperCase() + i.status.slice(1) : 'Unknown';
     let statusTitle = '';
@@ -244,7 +266,7 @@ function render() {
     }
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td><span class="itemname"><span class="dot" style="background:${rarityColor}"></span>${i.name}</span></td>
+      <td><span class="itemname"><span class="dot" style="background:${rarityColor}"></span>${i.name}${isNew ? '<span class="newbadge">New</span>' : ''}</span></td>
       <td class="muted">${i.category || ''}</td>
       <td class="muted">${(i.classes || []).join(', ')}</td>
       <td class="muted">${i.owner_name || ''}</td>

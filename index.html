@@ -149,17 +149,16 @@
   .btn-cancel { background: var(--bg); border: 1px solid var(--border); color: var(--text); }
   .modal-error { color: #f87171; font-size: 13px; margin-top: 10px; display: none; }
 
-  /* Live item preview card - layout/positioning copied from the in-game tooltip,
-     but colors stay on our existing --bg/--surface/--border/--accent palette */
+  /* Live item preview card */
   #previewCard {
     display: none; margin: 0 0 22px; background: var(--bg); border: 1px solid var(--border);
     border-radius: 12px; overflow: hidden;
   }
   #previewCard.show { display: block; }
-  .pc-header { display: flex; gap: 14px; padding: 16px; }
+  .pc-header { display: flex; gap: 14px; padding: 16px; border-bottom: 1px solid var(--border); }
   .pc-icon-wrap { position: relative; width: 60px; height: 60px; flex-shrink: 0; }
   .pc-icon {
-    width: 100%; height: 100%; border-radius: 8px; border: 1px solid var(--border);
+    width: 100%; height: 100%; border-radius: 8px; border: 2px solid var(--border);
     object-fit: contain; background: var(--surface); padding: 4px; box-sizing: border-box;
   }
   .pc-lv {
@@ -170,21 +169,29 @@
   .pc-title { min-width: 0; }
   .pc-name { font-weight: 600; font-size: 16px; line-height: 1.3; word-break: break-word; }
   .pc-subtitle { color: var(--text-muted); font-size: 12px; margin-top: 3px; }
-  .pc-tabs { display: flex; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-  .pc-tab {
-    flex: 1; text-align: center; padding: 9px; font-size: 12px; font-weight: 600;
-    letter-spacing: .03em; color: var(--text-muted);
-  }
-  .pc-tab.active { color: var(--text); border-bottom: 2px solid var(--accent); margin-bottom: -1px; }
   .pc-section { padding: 12px 16px; border-bottom: 1px solid var(--border); }
   .pc-section:last-child { border-bottom: none; }
   .pc-section-label {
     font-size: 10px; color: var(--text-muted); text-transform: uppercase;
     letter-spacing: .05em; margin-bottom: 8px;
   }
-  .pc-row { display: flex; justify-content: space-between; align-items: center; font-size: 14px; padding: 3px 0; }
-  .pc-row .pc-val { font-weight: 600; }
+  .pc-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; font-size: 14px; padding: 3px 0; }
+  .pc-row span:first-child { flex: 1; }
+  .pc-row .pc-val { font-weight: 600; white-space: nowrap; text-align: right; }
   .pc-row .pc-val.pc-val-green { color: #4ade80; }
+  
+  .pc-big-btn {
+    display: block; width: calc(100% - 32px); margin: 0 auto 16px;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text-muted); padding: 12px; border-radius: 8px;
+    font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.05em; cursor: pointer; text-align: center;
+    transition: all 0.2s;
+  }
+  .pc-big-btn:hover {
+    background: rgba(124,140,248,0.15); border-color: var(--accent); color: var(--accent);
+  }
+
   .back-to-top {
     position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
     width: 44px; height: 44px; background: var(--surface);
@@ -283,8 +290,10 @@
     <button class="modal-close" id="modalClose">&times;</button>
     <h2>Add an item</h2>
 
-    <label>Paste item stats (optional)</label>
-    <textarea id="modalPasteBox" class="paste-box" rows="1" placeholder="Paste copied item stats here to auto-fill..."></textarea>
+    <div id="pasteWrap">
+      <label>Paste item stats (optional)</label>
+      <textarea id="modalPasteBox" class="paste-box" rows="1" placeholder="Paste copied item stats here to auto-fill..."></textarea>
+    </div>
 
     <div id="previewCard">
       <div class="pc-header">
@@ -296,10 +305,6 @@
           <div class="pc-name" id="pcName"></div>
           <div class="pc-subtitle" id="pcSubtitle"></div>
         </div>
-      </div>
-      <div class="pc-tabs">
-        <div class="pc-tab active">EQUIP</div>
-        <div class="pc-tab">VENDOR</div>
       </div>
       <div class="pc-section">
         <div class="pc-section-label">Requirements</div>
@@ -313,6 +318,7 @@
         <div class="pc-section-label">Affixes</div>
         <div id="pcAffixes"></div>
       </div>
+      <button id="pcBigAddBtn" class="pc-big-btn" style="display:none;">Add to chest</button>
     </div>
 
     <label>Item</label>
@@ -350,10 +356,6 @@ const ARCHETYPES = {
 };
 const ARCHETYPE_LIST = Object.keys(ARCHETYPES);
 
-// Each Type maps to one or more real game "category" values.
-// needsClass: true  -> pick an archetype first (item's real category depends on it, e.g. mage Bodyarmor = "Robe")
-// needsClass: false -> category is fixed, skip straight to Level/Affixes
-// isTools: true     -> pick one of the 6 tool categories first
 const TYPE_CONFIG = {
   Helmet:    { needsClass: true, categories: ["Helmet","Hat"],
                archetypeCategory: { Warrior:"Helmet", Ranger:"Hat", Mage:"Hat" } },
@@ -390,8 +392,6 @@ const affixPools = {
 };
 
 const RARITY_ORDER = ["Uncommon","Rare","Epic","Legendary","Mythic"];
-
-// TODO: set this to your actual Render service URL (Render dashboard -> your service -> the .onrender.com link)
 const API_BASE = "https://sleepingforest-bot.onrender.com";
 
 let items = [];
@@ -400,7 +400,6 @@ let mineOnly = false;
 let currentUser = null;
 const selAffixes = new Set();
 
-// Does item i belong to the current Type/Class/ToolCat selection? (level/affix not considered here)
 function itemMatchesFilters(i) {
   if (!selType) return true;
   const cfg = TYPE_CONFIG[selType];
@@ -421,7 +420,6 @@ function itemMatchesFilters(i) {
   return cfg.categories.includes(i.category);
 }
 
-// The single real "category" value once fully resolved, or null if not yet resolved
 function resolvedCategory() {
   if (!selType) return null;
   const cfg = TYPE_CONFIG[selType];
@@ -489,8 +487,6 @@ function buildToolCatWrap() {
   });
 }
 
-
-// Turns "Copper Helmet" + category "Helmet" into tier label "Copper"
 function tierLabel(name, cat) {
   const suffix = ' ' + cat;
   return name.endsWith(suffix) ? name.slice(0, -suffix.length) : name;
@@ -564,7 +560,6 @@ document.getElementById('resetBtn').onclick = () => {
 };
 document.getElementById('search').addEventListener('input', render);
 
-// -- Auth (Discord login) ----------------------------------------------------------------
 function handleAuthRedirect() {
   const params = new URLSearchParams(window.location.search);
   const token = params.get('token');
@@ -648,11 +643,6 @@ document.getElementById('mineBtn').onclick = () => {
   render();
 };
 
-// -- Live item preview card ----------------------------------------------------------------
-// Best-effort mapping from an item's name/category/classes to its real CDN icon URL. Confirmed
-// against real assets for Rings/Amulets/Tools/Bow/Staff/Forging/Tailoring-armor/Leatherworking-armor.
-// Any wrong guess falls back to PLACEHOLDER_ICON via the <img> onerror handler below - never a
-// broken image, worst case it just shows the generic diamond icon.
 const PLACEHOLDER_ICON = "data:image/svg+xml;utf8," + encodeURIComponent(
   "<svg xmlns='http://www.w3.org/2000/svg' width='60' height='60'><rect width='60' height='60' rx='8' fill='#161922'/><path d='M20 40 L30 20 L40 40 Z' fill='#2a2e3a'/></svg>"
 );
@@ -661,11 +651,9 @@ const TOOL_FOLDERS_ICON = {
   Pickaxe: "Pickaxes", Axe: "Axes", Trap: "Traps",
   "Fishing Rod": "Fishingrods", Basket: "Baskets", Pouch: "Pouches",
 };
-// Shadowhide/Dragonhide/Abyssal drop "Leather" in the display name, but the asset filename keeps
-// it (and drops "hide") - e.g. "Shadowhide Boots" -> shadowleatherboots.png, not shadowhideboots.png.
 const LEATHER_TOP3_TIER = { Shadowhide: "shadow", Dragonhide: "dragon", Abyssal: "abyssal" };
 const ICON_SLUG_OVERRIDES = { "Leather Bow": "t1leatherworkingbow" };
-const ICON_TYPO_FIX = { "abyssalleatherbodyarmor": "abyysalleatherbodyarmor" }; // known CDN typo
+const ICON_TYPO_FIX = { "abyssalleatherbodyarmor": "abyysalleatherbodyarmor" }; 
 
 function iconSlugify(s) { return s.replace(/\s+/g, '').toLowerCase(); }
 
@@ -700,8 +688,6 @@ function getIconUrl(item) {
     return `https://cdn.degenidle.com/Blacksmithing/${folder}/${iconSlugify(name)}.png`;
   }
   if (arch === 'Mage') {
-    // The "Mystic" display tier's real asset word is "Celestial" for every Tailoring armor piece
-    // except Staff (Staff keeps the literal "Mystweave" name, handled above already).
     const n = /^Mystic\b/.test(name) ? name.replace(/^Mystic/, 'Celestial') : name;
     return `https://cdn.degenidle.com/Tailoring/Armor/${iconSlugify(n)}.png`;
   }
@@ -718,8 +704,8 @@ function getIconUrl(item) {
 
 const PROFESSION_LABEL = { Warrior: 'Forging', Ranger: 'Leatherworking', Mage: 'Tailoring', Accessory: 'Crafting' };
 
-let lastParsedEffects = [];      // [{name, value}] from the most recent successful paste - display only
-let lastParsedAffixValues = {};  // { affixName: value } from the most recent successful paste - display only
+let lastParsedEffects = [];      
+let lastParsedAffixValues = {};  
 
 document.getElementById('pcIcon').onerror = function () { this.onerror = null; this.src = PLACEHOLDER_ICON; };
 
@@ -730,11 +716,13 @@ function renderPreviewCard() {
   if (!entry) { card.classList.remove('show'); return; }
 
   const rarity = document.getElementById('modalRarity').value;
+  const borderColor = RARITY_COLORS[rarity] || 'var(--border)';
 
   document.getElementById('pcIcon').src = getIconUrl(entry) || PLACEHOLDER_ICON;
+  document.getElementById('pcIcon').style.borderColor = borderColor;
   document.getElementById('pcLv').textContent = `Lv.${entry.level}`;
   document.getElementById('pcName').textContent = entry.name;
-  document.getElementById('pcName').style.color = RARITY_COLORS[rarity] || 'var(--text)';
+  document.getElementById('pcName').style.color = borderColor;
 
   const arch = iconArchetype(entry.classes) || 'Accessory';
   const profession = PROFESSION_LABEL[arch] || 'Crafting';
@@ -777,7 +765,6 @@ function renderPreviewCard() {
   card.classList.add('show');
 }
 
-// -- Add Item modal -----------------------------------------------------------------------
 let itemMasterCache = null;
 let modalSelectedAffixes = new Set();
 let modalItemMap = {};
@@ -813,6 +800,9 @@ async function openAddModal() {
     raritySel.appendChild(opt);
   });
   raritySel.selectedIndex = 0;
+  
+  document.getElementById('pasteWrap').style.display = 'block';
+  document.getElementById('pcBigAddBtn').style.display = 'none';
   document.getElementById('modalPasteBox').value = '';
   document.getElementById('modalItemInput').value = '';
   document.getElementById('modalError').style.display = 'none';
@@ -842,6 +832,8 @@ function buildModalAffixes(master) {
     btn.textContent = a;
     if (modalSelectedAffixes.has(a)) btn.classList.add('active');
     btn.onclick = () => {
+      lastParsedAffixValues = {};
+      lastParsedEffects = [];
       if (modalSelectedAffixes.has(a)) { modalSelectedAffixes.delete(a); btn.classList.remove('active'); }
       else if (modalSelectedAffixes.size < cap) { modalSelectedAffixes.add(a); btn.classList.add('active'); }
       renderPreviewCard();
@@ -851,20 +843,6 @@ function buildModalAffixes(master) {
   renderPreviewCard();
 }
 
-// Parses text copied straight from the game's item tooltip, e.g.:
-//   Nyxium RingLv.80
-//   Nyxium Ring
-//   Rare Ring - Crafting Lv. 80
-//   ...
-//   Affixes
-//   Energy on Hit
-//   +2.48
-//   Health on Crit
-//   +4.95
-//   Compare vs Equipped
-// Pulls {name, value} pairs out of a block of pasted lines. Handles both paste formats seen in
-// the wild: value on its own line right after the name, or value glued onto the end of the same
-// line (e.g. "Combat Level80", "Attack Power+6.60") - depends on how the browser serializes the copy.
 function extractStatPairs(rawLines, startIdx, endIdx) {
   const pairs = [];
   let i = startIdx;
@@ -934,11 +912,19 @@ async function handlePastedStats(text) {
   const master = await ensureItemMaster();
   const parsed = parseItemPaste(text, master);
   if (!parsed) return false;
-  if (parsed.itemName) document.getElementById('modalItemInput').value = parsed.itemName;
+  
+  if (parsed.itemName) {
+    document.getElementById('modalItemInput').value = parsed.itemName;
+    document.getElementById('pasteWrap').style.display = 'none';
+    document.getElementById('pcBigAddBtn').style.display = 'block';
+  }
+  
   if (parsed.rarity) document.getElementById('modalRarity').value = parsed.rarity;
+  
   modalSelectedAffixes.clear();
   lastParsedEffects = parsed.effects || [];
   lastParsedAffixValues = parsed.affixValues || {};
+  
   if (parsed.itemName && parsed.affixNames.length) {
     const entry = modalItemMap[parsed.itemName];
     const pool = master.affixPools[entry.category] || [];
@@ -955,9 +941,9 @@ document.getElementById('modalPasteBox').addEventListener('input', async () => {
   const box = document.getElementById('modalPasteBox');
   const text = box.value;
   await handlePastedStats(text);
-  box.value = ''; // clear immediately - a fixed-height textarea shows whatever line the caret lands on
-                   // after a multi-line paste, so leaving raw text in here looks garbled/cut off
+  box.value = ''; 
 });
+
 document.getElementById('modalPasteBox').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
     e.preventDefault();
@@ -965,7 +951,6 @@ document.getElementById('modalPasteBox').addEventListener('keydown', (e) => {
   }
 });
 
-// Paste anywhere on the page (outside another input) to open the modal and auto-fill instantly
 window.addEventListener('paste', async (e) => {
   const activeTag = document.activeElement ? document.activeElement.tagName : '';
   if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
@@ -981,10 +966,15 @@ window.addEventListener('paste', async (e) => {
 
 document.getElementById('modalItemInput').addEventListener('input', () => {
   modalSelectedAffixes.clear();
+  lastParsedAffixValues = {};
+  lastParsedEffects = [];
   ensureItemMaster().then(buildModalAffixes);
 });
+
 document.getElementById('modalRarity').addEventListener('change', () => {
   modalSelectedAffixes.clear();
+  lastParsedAffixValues = {};
+  lastParsedEffects = [];
   ensureItemMaster().then(buildModalAffixes);
 });
 
@@ -994,6 +984,10 @@ document.getElementById('modalCancel').onclick = closeAddModal;
 document.getElementById('addModalBg').addEventListener('click', (e) => {
   if (e.target.id === 'addModalBg') closeAddModal();
 });
+
+document.getElementById('pcBigAddBtn').onclick = () => {
+  document.getElementById('modalSubmit').click();
+};
 
 document.getElementById('modalSubmit').onclick = async () => {
   const itemName = document.getElementById('modalItemInput').value;
@@ -1007,7 +1001,10 @@ document.getElementById('modalSubmit').onclick = async () => {
   }
   const token = localStorage.getItem('sf_token');
   const btn = document.getElementById('modalSubmit');
+  const bigBtn = document.getElementById('pcBigAddBtn');
   btn.disabled = true;
+  bigBtn.disabled = true;
+  
   try {
     const r = await fetch(`${API_BASE}/api/items/add`, {
       method: 'POST',
@@ -1024,6 +1021,7 @@ document.getElementById('modalSubmit').onclick = async () => {
     errEl.style.display = 'block';
   } finally {
     btn.disabled = false;
+    bigBtn.disabled = false;
   }
 };
 

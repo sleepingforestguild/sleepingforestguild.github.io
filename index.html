@@ -55,7 +55,7 @@
     color: var(--text-secondary); white-space: nowrap; display: inline-block;
   }
   .status { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-secondary); white-space: nowrap; position: relative; }
-  .status[data-tooltip] { cursor: help; border-bottom: 1px dotted var(--text-muted); }
+  .status[data-tooltip] { cursor: help; }
   .status[data-tooltip]:hover::after {
     content: attr(data-tooltip);
     position: absolute; bottom: 130%; left: 0;
@@ -223,7 +223,8 @@ function render() {
     const statusLabel = i.status ? i.status.charAt(0).toUpperCase() + i.status.slice(1) : 'Unknown';
     let statusTitle = '';
     if (i.status === 'rented' && i.borrower_name) {
-      statusTitle = `Rented to ${i.borrower_name}`;
+      const d = i.borrowed_at ? new Date(i.borrowed_at).toLocaleDateString() : '';
+      statusTitle = `Rented to ${i.borrower_name}${d ? ' on ' + d : ''}`;
     }
     const tr = document.createElement('tr');
     tr.innerHTML = `

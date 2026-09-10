@@ -50,11 +50,10 @@
   tbody td { padding: 14px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
   .tablewrap { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: visible; }
   .itemname { display: flex; align-items: center; gap: 9px; font-weight: 500; font-size: 16px; white-space: nowrap; }
-  .newbadge { display: none; }
   .newbadge {
     font-size: 10px; font-weight: 600; background: var(--accent); color: #0d0f14;
     padding: 2px 7px; border-radius: 5px; letter-spacing: .03em; text-transform: uppercase;
-    animation: pulse 2s ease-in-out infinite;
+    animation: pulse 2s ease-in-out infinite; flex-shrink: 0;
   }
   @keyframes pulse {
     0%, 100% { opacity: 1; }
@@ -92,7 +91,6 @@
     .tablewrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     table { min-width: 760px; }
     .status[data-tooltip]:hover::after { left: auto; right: 0; }
-    .newbadge { display: inline-block; }
   }
 </style>
 </head>

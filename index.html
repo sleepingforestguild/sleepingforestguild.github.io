@@ -42,16 +42,15 @@
   .pill:hover { border-color: var(--accent); }
   .pill.active { background: rgba(124,140,248,.15); border-color: var(--accent); color: var(--accent); }
   .pill.small { font-size: 14px; padding: 6px 14px; }
-  table { width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; table-layout: auto; }
   thead th {
     text-align: left; padding: 12px 14px; color: var(--text-muted);
     border-bottom: 1px solid var(--border); font-weight: 500; font-size: 12px;
     text-transform: uppercase; letter-spacing: .04em; white-space: nowrap;
-    overflow: hidden; text-overflow: ellipsis;
   }
-  tbody td { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tbody td { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; white-space: nowrap; }
   .tablewrap { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .itemname { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 500; font-size: 15px; }
+  .itemname { display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 15px; white-space: nowrap; }
   .itemname.clickable { cursor: pointer; }
   .itemname.clickable:hover { text-decoration: underline; }
   .newbadge {
@@ -64,11 +63,8 @@
     50% { opacity: .6; }
   }
   .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
-  .muted {
-    color: var(--text-secondary); white-space: nowrap; overflow: hidden;
-    text-overflow: ellipsis; display: block;
-  }
-  .affixlist { display: flex; flex-wrap: wrap; gap: 5px; }
+  .muted { color: var(--text-secondary); white-space: nowrap; }
+  .affixlist { display: flex; flex-wrap: nowrap; gap: 5px; }
   .affix {
     font-size: 11px; background: var(--bg); padding: 3px 8px; border-radius: 6px;
     color: var(--text-secondary); white-space: nowrap; display: inline-block;
@@ -120,8 +116,11 @@
     padding: 28px; width: 100%; max-width: 520px; max-height: 85vh; overflow-y: auto;
   }
   .modal h2 { margin: 0 0 18px; font-size: 20px; }
-  .modal label { display: block; font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; margin: 16px 0 8px; }
+  .modal label { display: block; font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; margin: 22px 0 10px; }
   .modal label:first-of-type { margin-top: 0; }
+  #modalAffixWrap { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--border); }
+  #modalAffixWrap label { margin-top: 0; }
+  #modalAffixWrap .pillrow { margin-bottom: 0; }
   .modal input[type=text], .modal select {
     width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text);
     padding: 11px 14px; border-radius: 9px; font-size: 15px; height: 44px; line-height: 1.4;
@@ -169,7 +168,7 @@
 
   <div class="row">
     <input type="text" id="search" placeholder="Search items...">
-    <button class="reset" id="mineBtn" style="display:none;">Mine</button>
+    <button class="reset" id="mineBtn" style="display:none;">My Items</button>
     <button class="reset" id="addBtn" style="display:none;">+ Add Item</button>
     <button class="reset" id="resetBtn">Reset</button>
   </div>
@@ -538,12 +537,15 @@ function renderAuthBox() {
       mineBtn.classList.remove('active');
       renderAuthBox(); render();
     };
-    mineBtn.style.display = 'inline-block';
     if (currentUser.linked) {
+      mineBtn.style.display = 'inline-block';
       addBtn.style.display = 'inline-block';
       removeHint.style.display = 'block';
       linkHint.style.display = 'none';
     } else {
+      mineBtn.style.display = 'none';
+      mineOnly = false;
+      mineBtn.classList.remove('active');
       addBtn.style.display = 'none';
       removeHint.style.display = 'none';
       linkHint.textContent = 'Run !link <ingame_name> in Discord to add or remove items.';
@@ -682,11 +684,10 @@ function parseItemPaste(text, master) {
   return { rarity, itemName, affixNames };
 }
 
-document.getElementById('modalPasteBox').addEventListener('input', async () => {
+async function handlePastedStats(text) {
   const master = await ensureItemMaster();
-  const text = document.getElementById('modalPasteBox').value;
   const parsed = parseItemPaste(text, master);
-  if (!parsed) return;
+  if (!parsed) return false;
   if (parsed.itemName) document.getElementById('modalItemInput').value = parsed.itemName;
   if (parsed.rarity) document.getElementById('modalRarity').value = parsed.rarity;
   modalSelectedAffixes.clear();
@@ -699,6 +700,35 @@ document.getElementById('modalPasteBox').addEventListener('input', async () => {
     });
   }
   buildModalAffixes(master);
+  return !!parsed.itemName;
+}
+
+document.getElementById('modalPasteBox').addEventListener('input', async () => {
+  const box = document.getElementById('modalPasteBox');
+  const text = box.value;
+  await handlePastedStats(text);
+  box.value = ''; // clear immediately - a fixed-height textarea shows whatever line the caret lands on
+                   // after a multi-line paste, so leaving raw text in here looks garbled/cut off
+});
+document.getElementById('modalPasteBox').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    document.getElementById('modalSubmit').focus();
+  }
+});
+
+// Paste anywhere on the page (outside another input) to open the modal and auto-fill instantly
+window.addEventListener('paste', async (e) => {
+  const activeTag = document.activeElement ? document.activeElement.tagName : '';
+  if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
+  if (!currentUser || !currentUser.linked) return;
+  const text = (e.clipboardData || window.clipboardData).getData('text');
+  if (!text || !text.trim()) return;
+  e.preventDefault();
+  if (document.getElementById('addModalBg').style.display === 'none') {
+    await openAddModal();
+  }
+  await handlePastedStats(text);
 });
 
 document.getElementById('modalItemInput').addEventListener('input', () => {

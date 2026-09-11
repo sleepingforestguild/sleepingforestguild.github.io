@@ -1120,6 +1120,10 @@ document.getElementById('pcBigAddBtn').onclick = () => {
   document.getElementById('modalSubmit').click();
 };
 
+// Maps a temp id -> the in-flight add's promise (resolves to the real server id, or throws).
+// Lets a rapid remove-right-after-add wait for the real id instead of hitting a 404.
+const pendingAdds = {};
+
 document.getElementById('modalSubmit').onclick = async () => {
   const itemName = resolveItemName(document.getElementById('modalItemInput').value);
   const rarity = document.getElementById('modalRarity').value;
@@ -1149,7 +1153,7 @@ document.getElementById('modalSubmit').onclick = async () => {
   closeAddModal();
   render();
 
-  try {
+  const addPromise = (async () => {
     const r = await fetch(`${API_BASE}/api/items/add`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -1157,14 +1161,23 @@ document.getElementById('modalSubmit').onclick = async () => {
     });
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || 'Something went wrong.');
-    // Swap the placeholder for the real record (real id, exact added_at, etc).
+    return data.item;
+  })();
+  pendingAdds[tempId] = addPromise;
+
+  try {
+    const realItem = await addPromise;
+    // Swap the placeholder for the real record (real id, exact added_at, etc) - unless a
+    // rapid remove already deleted this temp item while we were waiting.
     const idx = items.findIndex(x => x.id === tempId);
-    if (idx !== -1) items[idx] = data.item;
+    if (idx !== -1) items[idx] = realItem;
     render();
   } catch (e) {
     items = items.filter(x => x.id !== tempId);
     render();
     alert(e.message);
+  } finally {
+    delete pendingAdds[tempId];
   }
 };
 
@@ -1243,7 +1256,7 @@ function hideDeleteConfirm() {
 }
 document.getElementById('deleteConfirmBtn').addEventListener('click', async (e) => {
   e.stopPropagation();
-  const id = deleteConfirmItemId;
+  let id = deleteConfirmItemId;
   if (!id) return;
 
   // Optimistic: remove from the table immediately, don't make them wait on the network round trip.
@@ -1254,6 +1267,19 @@ document.getElementById('deleteConfirmBtn').addEventListener('click', async (e) 
   render();
 
   try {
+    // If this item is still mid-add (id is a temp placeholder), wait for the real id to come
+    // back first instead of firing a remove request against an id the backend's never heard of.
+    if (pendingAdds[id]) {
+      let realItem;
+      try {
+        realItem = await pendingAdds[id];
+      } catch {
+        // The add itself failed - it never really existed, so there's nothing to remove or
+        // roll back. The add handler's own catch already cleans up and shows that error.
+        return;
+      }
+      id = realItem.id;
+    }
     const token = localStorage.getItem('sf_token');
     const r = await fetch(`${API_BASE}/api/items/${id}/remove`, {
       method: 'POST',

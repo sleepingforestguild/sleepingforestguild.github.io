@@ -1336,7 +1336,12 @@ function render() {
     const canRemoveThis = canManage && (i.owner_id === currentUser.id || currentUser.officer);
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td><span class="itemname${canRemoveThis ? ' clickable' : ''}" style="color:${rarityColor}">${i.name}${isNew ? '<span class="newbadge">New</span>' : ''}</span></td>
+      <td>
+        <div class="itemname">
+          <span class="item-text${canRemoveThis ? ' clickable' : ''}" style="color:${rarityColor}">${i.name}</span>
+          ${isNew ? '<span class="newbadge">New</span>' : ''}
+        </div>
+      </td>
       <td class="muted">${i.category || ''}</td>
       <td class="muted">${abbreviateClasses(i.classes)}</td>
       <td class="muted">${i.owner_name || ''}</td>
@@ -1354,12 +1359,14 @@ function render() {
       });
     }
     if (canRemoveThis) {
-      const nameEl = tr.querySelector('.itemname');
-      nameEl.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (deleteConfirmItemId === i.id) { hideDeleteConfirm(); return; }
-        showDeleteConfirm(nameEl, i.id);
-      });
+      const nameEl = tr.querySelector('.item-text.clickable');
+      if (nameEl) {
+        nameEl.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (deleteConfirmItemId === i.id) { hideDeleteConfirm(); return; }
+          showDeleteConfirm(nameEl, i.id);
+        });
+      }
     }
     rows.appendChild(tr);
   });

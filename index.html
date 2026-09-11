@@ -384,8 +384,6 @@
 </div>
 
 <script>
-const ITEMS_URL = "https://raw.githubusercontent.com/darkblisss/sleepingforest-bot/main/items.json?cb=" + Date.now();
-
 const RARITY_COLORS = {
   Common: "#d1d5db", Uncommon: "#4ade80", Rare: "#60a5fa", Epic: "#c084fc",
   Legendary: "#fb923c", Mythic: "#f472b6"
@@ -435,6 +433,7 @@ const affixPools = {
 
 const RARITY_ORDER = ["Uncommon","Rare","Epic","Legendary","Mythic"];
 const API_BASE = "https://sleepingforest-bot.onrender.com";
+const ITEMS_URL = `${API_BASE}/api/items`;
 
 let items = [];
 let selType = null, selClass = null, selToolCat = null, selLevel = null;
@@ -1198,6 +1197,11 @@ document.getElementById('modalSubmit').onclick = async () => {
     });
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || 'Something went wrong.');
+    if (!data.synced) {
+      // The backend already retried a few times - this means it genuinely couldn't reach
+      // GitHub, not just a momentary clash with another write. Worth knowing about.
+      console.warn('Item saved locally but failed to sync to GitHub after retries:', data.item?.name);
+    }
     return data.item;
   })();
   pendingAdds[tempId] = addPromise;
@@ -1425,8 +1429,8 @@ topBtn.addEventListener('click', () => {
   await loadUser();
   try {
     const r = await fetch(ITEMS_URL);
-    if (!r.ok) throw new Error('items.json not found yet - add your first item with /additem');
-    items = await r.json();
+    if (!r.ok) throw new Error('Could not load the chest - try refreshing in a moment.');
+    items = (await r.json()).items;
     document.getElementById('loading').style.display = 'none';
     render();
   } catch (err) {

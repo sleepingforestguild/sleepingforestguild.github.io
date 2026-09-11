@@ -84,7 +84,8 @@
     border: 1px solid var(--border); padding: 8px 10px 8px 14px; border-radius: 10px;
     font-size: 13px; color: var(--text-secondary); z-index: 1000; box-shadow: 0 4px 16px rgba(0,0,0,.5);
   }
-  .empty, .loading { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 15px; }
+  .empty { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 15px; }
+  .loading { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 15px; }
 
   .topbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
   .authbox { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
@@ -106,47 +107,41 @@
   .rowbtn:hover { background: rgba(124,140,248,.28); }
   .rowbtn.danger { background: rgba(248,113,113,.12); border-color: #f87171; color: #f87171; }
   .rowbtn.danger:hover { background: rgba(248,113,113,.25); }
+  .rowbtns { display: flex; gap: 6px; }
 
   .modalbg {
-    position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex;
+    position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex;
     align-items: center; justify-content: center; z-index: 100; padding: 20px;
   }
   .modal {
     background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
     padding: 28px; width: 100%; max-width: 520px; max-height: 85vh; overflow-y: auto;
   }
-  
-  /* Modal state when converted entirely into a pasted preview card */
-  .modal.card-mode {
-    padding: 0; max-width: 420px; background: #11131a; border: 1px solid #2a2e3a;
-  }
-
-  /* Standard Manual UI Styles */
-  #defaultUiWrap h2 { margin: 0 0 18px; font-size: 20px; }
-  #defaultUiWrap label { display: block; font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; margin: 22px 0 10px; }
-  #defaultUiWrap label:first-of-type { margin-top: 0; }
+  .modal h2 { margin: 0 0 18px; font-size: 20px; }
+  .modal label { display: block; font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; margin: 22px 0 10px; }
+  .modal label:first-of-type { margin-top: 0; }
   #modalAffixWrap { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--border); }
   #modalAffixWrap label { margin-top: 0; }
   #modalAffixWrap .pillrow { margin-bottom: 0; }
-  #defaultUiWrap input[type=text], #defaultUiWrap select {
+  .modal input[type=text], .modal select {
     width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text);
     padding: 11px 14px; border-radius: 9px; font-size: 15px; height: 44px; line-height: 1.4;
     box-sizing: border-box; font-family: inherit;
   }
-  #defaultUiWrap textarea.paste-box {
+  .modal textarea.paste-box {
     width: 100%; height: 44px; min-height: 44px; max-height: 44px; resize: none; overflow: hidden;
     background: var(--bg); border: 1px solid var(--border); color: var(--text);
     padding: 11px 14px; border-radius: 9px; font-size: 15px; line-height: 1.4;
     box-sizing: border-box; font-family: inherit; white-space: nowrap;
   }
-  #defaultUiWrap textarea.paste-box::placeholder { color: var(--text-muted); }
-  #defaultUiWrap select {
+  .modal textarea.paste-box::placeholder { color: var(--text-muted); }
+  .modal select {
     -webkit-appearance: none; appearance: none;
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%239a9ea8'/></svg>");
-    background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px;
+    background-repeat: no-repeat; background-position: right 14px center;
+    padding-right: 36px;
   }
-  .modal-close { float: right; background: none; border: none; color: var(--text-muted); font-size: 24px; cursor: pointer; line-height: 1; padding: 0; }
-  .modal-close:hover { color: #fff; }
+  .modal-close { float: right; background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer; line-height: 1; }
   .modal-actions { display: flex; gap: 10px; margin-top: 22px; }
   .modal-actions button { flex: 1; padding: 12px; border-radius: 10px; font-size: 15px; cursor: pointer; }
   .btn-primary { background: var(--accent); border: none; color: #0d0f14; font-weight: 600; }
@@ -154,48 +149,48 @@
   .btn-cancel { background: var(--bg); border: 1px solid var(--border); color: var(--text); }
   .modal-error { color: #f87171; font-size: 13px; margin-top: 10px; display: none; }
 
-  /* Either/Or Full Card View Styles */
-  #previewCard { display: none; width: 100%; }
-  .pc-top { display: flex; gap: 16px; padding: 22px 20px; border-bottom: 1px solid #2a2e3a; position: relative; }
-  .pc-icon-wrap { position: relative; width: 68px; height: 68px; flex-shrink: 0; }
+  /* Live item preview card */
+  #previewCard {
+    display: none; margin: 0 0 22px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden;
+  }
+  #previewCard.show { display: block; }
+  .pc-header { display: flex; gap: 14px; padding: 16px; border-bottom: 1px solid var(--border); }
+  .pc-icon-wrap { position: relative; width: 60px; height: 60px; flex-shrink: 0; }
   .pc-icon {
-    width: 100%; height: 100%; border-radius: 8px; border: 1px solid var(--border);
-    object-fit: contain; background: #161922; padding: 4px; box-sizing: border-box;
+    width: 100%; height: 100%; border-radius: 8px; border: 2px solid var(--border);
+    object-fit: contain; background: var(--surface); padding: 4px; box-sizing: border-box;
   }
   .pc-lv {
-    position: absolute; bottom: -6px; right: -6px; background: #000; color: #fff;
-    font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 4px;
-    border: 1px solid #2a2e3a; letter-spacing: 0.03em;
+    position: absolute; bottom: -5px; right: -5px; background: #000; color: var(--text);
+    font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 5px;
+    border: 1px solid var(--border); line-height: 1.4;
   }
-  .pc-info { display: flex; flex-direction: column; justify-content: center; padding-right: 20px; }
-  .pc-name { font-weight: 600; font-size: 18px; line-height: 1.2; }
-  .pc-sub { color: #9a9ea8; font-size: 13px; margin-top: 6px; }
-  
-  .pc-close { position: absolute; top: 16px; right: 16px; background: none; border: none; color: #9a9ea8; font-size: 24px; cursor: pointer; padding: 4px; line-height: 1; }
-  .pc-close:hover { color: #fff; }
-
-  .pc-body { padding: 0 20px; }
-  .pc-section { border-bottom: 1px solid #2a2e3a; padding: 18px 0; }
+  .pc-title { min-width: 0; }
+  .pc-name { font-weight: 600; font-size: 16px; line-height: 1.3; word-break: break-word; }
+  .pc-subtitle { color: var(--text-muted); font-size: 12px; margin-top: 3px; }
+  .pc-section { padding: 12px 16px; border-bottom: 1px solid var(--border); }
   .pc-section:last-child { border-bottom: none; }
-  .pc-sec-title {
-    font-size: 11px; font-weight: 700; color: #6b6f7a; text-transform: uppercase;
-    letter-spacing: 0.08em; margin-bottom: 14px;
+  .pc-section-label {
+    font-size: 10px; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: .05em; margin-bottom: 8px;
   }
-  .pc-row { display: flex; justify-content: space-between; align-items: center; font-size: 14.5px; margin-bottom: 10px; }
-  .pc-row:last-child { margin-bottom: 0; }
-  .pc-row span:first-child { color: #d1d5db; }
-  .pc-row span:last-child { font-weight: 600; color: #fff; text-align: right; }
-  .pc-val-green { color: #4ade80 !important; }
+  .pc-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; font-size: 14px; padding: 3px 0; }
+  .pc-row span:first-child { flex: 1; }
+  .pc-row .pc-val { font-weight: 600; white-space: nowrap; text-align: right; }
+  .pc-row .pc-val.pc-val-green { color: #4ade80; }
   
-  .pc-footer { background: #161922; padding: 20px; border-top: 1px solid #2a2e3a; }
-  .pc-btn-purple {
-    width: 100%; background: #5a4ee4; color: #fff; border: none;
-    border-radius: 8px; padding: 16px; font-size: 15px; font-weight: 600;
-    cursor: pointer; display: flex; justify-content: center; align-items: center;
-    gap: 10px; transition: background 0.2s; letter-spacing: 0.02em; text-transform: uppercase;
+  .pc-big-btn {
+    display: block; width: calc(100% - 32px); margin: 0 auto 16px;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text-muted); padding: 12px; border-radius: 8px;
+    font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.05em; cursor: pointer; text-align: center;
+    transition: all 0.2s;
   }
-  .pc-btn-purple:hover { background: #4b41cc; }
-  .pc-btn-purple:disabled { opacity: 0.6; cursor: not-allowed; }
+  .pc-big-btn:hover {
+    background: rgba(124,140,248,0.15); border-color: var(--accent); color: var(--accent);
+  }
 
   .back-to-top {
     position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
@@ -208,9 +203,12 @@
   .back-to-top:hover { border-color: var(--accent); color: var(--accent); }
 
   @media (max-width: 768px) {
-    body { padding: 1.5rem 1rem; }
+    body { padding: 1.5rem 1rem; overflow-x: hidden; }
     h1 { font-size: 24px; }
     .topbar { flex-direction: column; }
+    .row { flex-wrap: wrap; }
+    .row input[type=text] { flex: 1 1 100%; min-width: 0; }
+    .row button.reset { flex: 1 1 auto; min-width: 0; padding: 11px 14px; }
     .tablewrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     thead th { position: static; }
   }
@@ -291,84 +289,58 @@
 <button id="topBtn" class="back-to-top">&uarr;</button>
 
 <div class="modalbg" id="addModalBg" style="display:none;">
-  <div class="modal" id="modalContainer">
-    
-    <!-- EITHER: Standard form UI -->
-    <div id="defaultUiWrap">
-      <button class="modal-close" id="modalClose">&times;</button>
-      <h2>Add an item</h2>
+  <div class="modal">
+    <button class="modal-close" id="modalClose">&times;</button>
+    <h2>Add an item</h2>
 
-      <div id="pasteWrap">
-        <label>Paste item stats (optional)</label>
-        <textarea id="modalPasteBox" class="paste-box" rows="1" placeholder="Paste copied item stats here to auto-fill..."></textarea>
-      </div>
-
-      <label>Item</label>
-      <input type="text" id="modalItemInput" list="modalItemList" placeholder="Start typing an item name...">
-      <datalist id="modalItemList"></datalist>
-
-      <label>Rarity</label>
-      <select id="modalRarity"></select>
-
-      <div id="modalAffixWrap" style="display:none;">
-        <label>Affixes</label>
-        <div class="pillrow" id="modalAffixes"></div>
-      </div>
-
-      <p class="modal-error" id="modalError"></p>
-      <div class="modal-actions">
-        <button class="btn-cancel" id="modalCancel">Cancel</button>
-        <button class="btn-primary" id="modalSubmit">Add to chest</button>
-      </div>
+    <div id="pasteWrap">
+      <label>Paste item stats (optional)</label>
+      <textarea id="modalPasteBox" class="paste-box" rows="1" placeholder="Paste copied item stats here to auto-fill..."></textarea>
     </div>
 
-    <!-- OR: Full Card View (Only shown after paste) -->
     <div id="previewCard">
-      <div class="pc-top">
+      <div class="pc-header">
         <div class="pc-icon-wrap">
           <img class="pc-icon" id="pcIcon" src="" alt="">
           <span class="pc-lv" id="pcLv"></span>
         </div>
-        <div class="pc-info">
+        <div class="pc-title">
           <div class="pc-name" id="pcName"></div>
-          <div class="pc-sub" id="pcSubtitle"></div>
-        </div>
-        <button class="pc-close" id="pcCloseBtn">&times;</button>
-      </div>
-      
-      <div class="pc-body">
-        <div class="pc-section">
-          <div class="pc-sec-title">Requirements</div>
-          <div class="pc-row">
-            <span>Combat Level</span>
-            <span class="pc-val-green" id="pcLevel"></span>
-          </div>
-          <div class="pc-row" id="pcClassRow" style="display:none;">
-            <span>Class</span>
-            <span class="pc-val-green" id="pcClassText"></span>
-          </div>
-        </div>
-        
-        <div class="pc-section" id="pcEffectsSection" style="display:none;">
-          <div class="pc-sec-title">Effects</div>
-          <div id="pcEffects"></div>
-        </div>
-        
-        <div class="pc-section" id="pcAffixesSection" style="display:none;">
-          <div class="pc-sec-title">Affixes</div>
-          <div id="pcAffixes"></div>
+          <div class="pc-subtitle" id="pcSubtitle"></div>
         </div>
       </div>
-      
-      <div class="pc-footer">
-        <p class="modal-error" id="cardError" style="margin-bottom:12px; text-align:center;"></p>
-        <button id="pcBigAddBtn" class="pc-btn-purple">
-          <svg width="18" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-top:-2px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-          ADD TO CHEST
-        </button>
+      <div class="pc-section">
+        <div class="pc-section-label">Requirements</div>
+        <div class="pc-row"><span>Combat Level</span><span class="pc-val pc-val-green" id="pcLevel"></span></div>
       </div>
+      <div class="pc-section" id="pcEffectsSection" style="display:none;">
+        <div class="pc-section-label">Effects</div>
+        <div id="pcEffects"></div>
+      </div>
+      <div class="pc-section" id="pcAffixesSection" style="display:none;">
+        <div class="pc-section-label">Affixes</div>
+        <div id="pcAffixes"></div>
+      </div>
+      <button id="pcBigAddBtn" class="pc-big-btn" style="display:none;">Add to chest</button>
     </div>
 
+    <label>Item</label>
+    <input type="text" id="modalItemInput" list="modalItemList" placeholder="Start typing an item name...">
+    <datalist id="modalItemList"></datalist>
+
+    <label>Rarity</label>
+    <select id="modalRarity"></select>
+
+    <div id="modalAffixWrap" style="display:none;">
+      <label>Affixes</label>
+      <div class="pillrow" id="modalAffixes"></div>
+    </div>
+
+    <p class="modal-error" id="modalError"></p>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="modalCancel">Cancel</button>
+      <button class="btn-primary" id="modalSubmit">Add to chest</button>
+    </div>
   </div>
 </div>
 
@@ -735,7 +707,66 @@ function getIconUrl(item) {
 
 const PROFESSION_LABEL = { Warrior: 'Forging', Ranger: 'Leatherworking', Mage: 'Tailoring', Accessory: 'Crafting' };
 
+let lastParsedEffects = [];      
+let lastParsedAffixValues = {};  
+
 document.getElementById('pcIcon').onerror = function () { this.onerror = null; this.src = PLACEHOLDER_ICON; };
+
+function renderPreviewCard() {
+  const card = document.getElementById('previewCard');
+  const itemName = document.getElementById('modalItemInput').value;
+  const entry = modalItemMap[itemName];
+  if (!entry) { card.classList.remove('show'); return; }
+
+  const rarity = document.getElementById('modalRarity').value;
+  const borderColor = RARITY_COLORS[rarity] || 'var(--border)';
+
+  document.getElementById('pcIcon').src = getIconUrl(entry) || PLACEHOLDER_ICON;
+  document.getElementById('pcIcon').style.borderColor = borderColor;
+  document.getElementById('pcLv').textContent = `Lv.${entry.level}`;
+  document.getElementById('pcName').textContent = entry.name;
+  document.getElementById('pcName').style.color = borderColor;
+
+  const arch = iconArchetype(entry.classes) || 'Accessory';
+  const profession = PROFESSION_LABEL[arch] || 'Crafting';
+  document.getElementById('pcSubtitle').textContent = `${rarity} ${entry.category} \u00B7 ${profession} Lv. ${entry.level}`;
+  document.getElementById('pcLevel').textContent = entry.level;
+
+  const effSection = document.getElementById('pcEffectsSection');
+  const effEl = document.getElementById('pcEffects');
+  if (lastParsedEffects.length) {
+    effEl.innerHTML = '';
+    lastParsedEffects.forEach(p => {
+      const row = document.createElement('div');
+      row.className = 'pc-row';
+      const val = p.value ? '+' + p.value.replace(/^\+/, '') : '';
+      row.innerHTML = `<span>${p.name}</span><span class="pc-val">${val}</span>`;
+      effEl.appendChild(row);
+    });
+    effSection.style.display = 'block';
+  } else {
+    effSection.style.display = 'none';
+  }
+
+  const affSection = document.getElementById('pcAffixesSection');
+  const affEl = document.getElementById('pcAffixes');
+  if (modalSelectedAffixes.size) {
+    affEl.innerHTML = '';
+    [...modalSelectedAffixes].forEach(name => {
+      const row = document.createElement('div');
+      row.className = 'pc-row';
+      const raw = lastParsedAffixValues[name];
+      const val = raw ? '+' + raw.replace(/^\+/, '') : '';
+      row.innerHTML = `<span>${name}</span><span class="pc-val">${val}</span>`;
+      affEl.appendChild(row);
+    });
+    affSection.style.display = 'block';
+  } else {
+    affSection.style.display = 'none';
+  }
+
+  card.classList.add('show');
+}
 
 let itemMasterCache = null;
 let modalSelectedAffixes = new Set();
@@ -773,17 +804,15 @@ async function openAddModal() {
   });
   raritySel.selectedIndex = 0;
   
-  // Reset UI back to manual form
-  document.querySelector('.modal').classList.remove('card-mode');
-  document.getElementById('defaultUiWrap').style.display = 'block';
-  document.getElementById('previewCard').style.display = 'none';
-
+  document.getElementById('pasteWrap').style.display = 'block';
+  document.getElementById('pcBigAddBtn').style.display = 'none';
   document.getElementById('modalPasteBox').value = '';
   document.getElementById('modalItemInput').value = '';
   document.getElementById('modalError').style.display = 'none';
-  document.getElementById('cardError').style.display = 'none';
   modalSelectedAffixes.clear();
-  
+  lastParsedEffects = [];
+  lastParsedAffixValues = {};
+  document.getElementById('previewCard').classList.remove('show');
   buildModalAffixes(master);
   document.getElementById('addModalBg').style.display = 'flex';
   document.getElementById('modalPasteBox').focus();
@@ -796,7 +825,7 @@ function buildModalAffixes(master) {
   const entry = modalItemMap[document.getElementById('modalItemInput').value];
   const rarity = document.getElementById('modalRarity').value;
   const pool = entry ? (master.affixPools[entry.category] || []) : [];
-  if (!entry || pool.length === 0) { wrap.style.display = 'none'; return; }
+  if (!entry || pool.length === 0) { wrap.style.display = 'none'; renderPreviewCard(); return; }
   wrap.style.display = 'block';
   const cap = master.rarityAffixCap[rarity] || 4;
   pool.forEach(a => {
@@ -806,11 +835,15 @@ function buildModalAffixes(master) {
     btn.textContent = a;
     if (modalSelectedAffixes.has(a)) btn.classList.add('active');
     btn.onclick = () => {
+      lastParsedAffixValues = {};
+      lastParsedEffects = [];
       if (modalSelectedAffixes.has(a)) { modalSelectedAffixes.delete(a); btn.classList.remove('active'); }
       else if (modalSelectedAffixes.size < cap) { modalSelectedAffixes.add(a); btn.classList.add('active'); }
+      renderPreviewCard();
     };
     affixEl.appendChild(btn);
   });
+  renderPreviewCard();
 }
 
 function extractStatPairs(rawLines, startIdx, endIdx) {
@@ -818,13 +851,11 @@ function extractStatPairs(rawLines, startIdx, endIdx) {
   let i = startIdx;
   while (i < endIdx) {
     const line = rawLines[i];
-    // This allows percentages to be attached to the number properly, enabling perfectly aligned spacing on the row.
-    const embedded = line.match(/^(.*?)\s*([+-]?\d+(?:\.\d+)?%?)\s*$/);
-    
+    const embedded = line.match(/^(.*?)\s*([+-]?\d+(?:\.\d+)?)\s*$/);
     if (embedded && embedded[1].trim()) {
       pairs.push({ name: embedded[1].trim(), value: embedded[2] });
       i++;
-    } else if (i + 1 < endIdx && /^[+-]?\d+(?:\.\d+)?%?$/.test(rawLines[i + 1])) {
+    } else if (i + 1 < endIdx && /^[+-]?\d+(?:\.\d+)?$/.test(rawLines[i + 1])) {
       pairs.push({ name: line, value: rawLines[i + 1] });
       i += 2;
     } else {
@@ -883,79 +914,30 @@ function parseItemPaste(text, master) {
 async function handlePastedStats(text) {
   const master = await ensureItemMaster();
   const parsed = parseItemPaste(text, master);
-  if (!parsed || !parsed.itemName) return false;
+  if (!parsed) return false;
   
-  // Safely seed the background form values so our submission triggers seamlessly
-  document.getElementById('modalItemInput').value = parsed.itemName;
+  if (parsed.itemName) {
+    document.getElementById('modalItemInput').value = parsed.itemName;
+    document.getElementById('pasteWrap').style.display = 'none';
+    document.getElementById('pcBigAddBtn').style.display = 'block';
+  }
+  
   if (parsed.rarity) document.getElementById('modalRarity').value = parsed.rarity;
   
-  const entry = modalItemMap[parsed.itemName];
-  
-  // Transform to Card view 
-  document.getElementById('defaultUiWrap').style.display = 'none';
-  document.querySelector('.modal').classList.add('card-mode');
-  document.getElementById('previewCard').style.display = 'block';
-  
-  const borderColor = RARITY_COLORS[parsed.rarity || 'Common'] || 'var(--border)';
-  document.getElementById('pcIcon').src = getIconUrl(entry) || PLACEHOLDER_ICON;
-  document.getElementById('pcIcon').style.borderColor = borderColor;
-  document.getElementById('pcLv').textContent = `Lv.${entry.level}`;
-  document.getElementById('pcName').textContent = entry.name;
-  document.getElementById('pcName').style.color = borderColor;
-
-  const arch = iconArchetype(entry.classes) || 'Accessory';
-  const profession = PROFESSION_LABEL[arch] || 'Crafting';
-  document.getElementById('pcSubtitle').textContent = `${parsed.rarity || 'Common'} ${entry.category} \u00B7 ${profession} Lv. ${entry.level}`;
-  document.getElementById('pcLevel').textContent = entry.level;
-
-  if (entry.classes && entry.classes.length) {
-    document.getElementById('pcClassRow').style.display = 'flex';
-    document.getElementById('pcClassText').textContent = entry.classes.join(', ');
-  } else {
-    document.getElementById('pcClassRow').style.display = 'none';
-  }
-
-  const effSection = document.getElementById('pcEffectsSection');
-  const effEl = document.getElementById('pcEffects');
-  if (parsed.effects && parsed.effects.length) {
-    effEl.innerHTML = '';
-    parsed.effects.forEach(p => {
-      const row = document.createElement('div');
-      row.className = 'pc-row';
-      const val = p.value ? '+' + p.value.replace(/^\+/, '') : '';
-      row.innerHTML = `<span>${p.name}</span><span>${val}</span>`;
-      effEl.appendChild(row);
-    });
-    effSection.style.display = 'block';
-  } else {
-    effSection.style.display = 'none';
-  }
-
-  const affSection = document.getElementById('pcAffixesSection');
-  const affEl = document.getElementById('pcAffixes');
-  if (parsed.affixNames && parsed.affixNames.length) {
-    affEl.innerHTML = '';
-    parsed.affixNames.forEach(name => {
-      const row = document.createElement('div');
-      row.className = 'pc-row';
-      const raw = parsed.affixValues[name];
-      const val = raw ? '+' + raw.replace(/^\+/, '') : '';
-      row.innerHTML = `<span>${name}</span><span>${val}</span>`;
-      affEl.appendChild(row);
-    });
-    affSection.style.display = 'block';
-  } else {
-    affSection.style.display = 'none';
-  }
-
   modalSelectedAffixes.clear();
-  const pool = master.affixPools[entry.category] || [];
-  parsed.affixNames.forEach(raw => {
-    const match = pool.find(a => a.toLowerCase() === raw.toLowerCase());
-    if (match) modalSelectedAffixes.add(match);
-  });
-
-  return true;
+  lastParsedEffects = parsed.effects || [];
+  lastParsedAffixValues = parsed.affixValues || {};
+  
+  if (parsed.itemName && parsed.affixNames.length) {
+    const entry = modalItemMap[parsed.itemName];
+    const pool = master.affixPools[entry.category] || [];
+    parsed.affixNames.forEach(raw => {
+      const match = pool.find(a => a.toLowerCase() === raw.toLowerCase());
+      if (match) modalSelectedAffixes.add(match);
+    });
+  }
+  buildModalAffixes(master);
+  return !!parsed.itemName;
 }
 
 document.getElementById('modalPasteBox').addEventListener('input', async () => {
@@ -987,17 +969,29 @@ window.addEventListener('paste', async (e) => {
 
 document.getElementById('modalItemInput').addEventListener('input', () => {
   modalSelectedAffixes.clear();
+  lastParsedAffixValues = {};
+  lastParsedEffects = [];
   ensureItemMaster().then(buildModalAffixes);
 });
 
 document.getElementById('modalRarity').addEventListener('change', () => {
   modalSelectedAffixes.clear();
-  ensureItemMaster().then(buildModalAffixes);
+  lastParsedAffixValues = {};
+  lastParsedEffects = [];
+  ensureItemMaster().then(master => {
+    buildModalAffixes(master);
+    // If what's typed in the Item box exactly matches a real item, treat this the same as a
+    // completed paste once rarity is picked - no need to have literally pasted to get the card.
+    const itemName = document.getElementById('modalItemInput').value;
+    if (modalItemMap[itemName]) {
+      document.getElementById('pasteWrap').style.display = 'none';
+      document.getElementById('pcBigAddBtn').style.display = 'block';
+    }
+  });
 });
 
 function closeAddModal() { document.getElementById('addModalBg').style.display = 'none'; }
 document.getElementById('modalClose').onclick = closeAddModal;
-document.getElementById('pcCloseBtn').onclick = closeAddModal;
 document.getElementById('modalCancel').onclick = closeAddModal;
 document.getElementById('addModalBg').addEventListener('click', (e) => {
   if (e.target.id === 'addModalBg') closeAddModal();
@@ -1011,9 +1005,7 @@ document.getElementById('modalSubmit').onclick = async () => {
   const itemName = document.getElementById('modalItemInput').value;
   const rarity = document.getElementById('modalRarity').value;
   const errEl = document.getElementById('modalError');
-  const cardErrEl = document.getElementById('cardError');
   errEl.style.display = 'none';
-  cardErrEl.style.display = 'none';
   if (!modalItemMap[itemName]) {
     errEl.textContent = 'Pick an item from the list.';
     errEl.style.display = 'block';
@@ -1039,8 +1031,6 @@ document.getElementById('modalSubmit').onclick = async () => {
   } catch (e) {
     errEl.textContent = e.message;
     errEl.style.display = 'block';
-    cardErrEl.textContent = e.message;
-    cardErrEl.style.display = 'block';
   } finally {
     btn.disabled = false;
     bigBtn.disabled = false;
@@ -1069,8 +1059,15 @@ function abbreviateClasses(classes) {
   return output.join(', ');
 }
 
+// "New" badge is relative to your last visit, not a fixed 24h window. We read the stored
+// timestamp first (so it still applies for the whole current session), then immediately overwrite
+// it with now - so next time you open the page, only items added since *this* visit count as new.
+const LAST_VISIT_KEY = 'sf_last_visit';
+const lastVisitTimestamp = Number(localStorage.getItem(LAST_VISIT_KEY)) || (Date.now() - 24 * 60 * 60 * 1000);
+localStorage.setItem(LAST_VISIT_KEY, String(Date.now()));
+
 function isItemNew(i) {
-  return !!(i.added_at && (Date.now() - new Date(i.added_at).getTime()) < 24 * 60 * 60 * 1000);
+  return !!(i.added_at && new Date(i.added_at).getTime() > lastVisitTimestamp);
 }
 
 const tooltipEl = document.getElementById('tooltipEl');

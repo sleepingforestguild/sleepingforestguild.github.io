@@ -850,7 +850,15 @@ async function openAddModal() {
   modalItemMap = {};
   const list = document.getElementById('modalItemList');
   list.innerHTML = '';
-  master.items.forEach(it => {
+  // Regular gear (level 1-80) sorted high-to-low first, endgame tiers (85+) pushed to the
+  // bottom instead of interleaving by raw level - they're rare enough that burying common
+  // items under them in the suggestion list isn't worth it.
+  const sortedItems = [...master.items].sort((a, b) => {
+    const aEndgame = a.level > 80, bEndgame = b.level > 80;
+    if (aEndgame !== bEndgame) return aEndgame ? 1 : -1;
+    return b.level - a.level;
+  });
+  sortedItems.forEach(it => {
     modalItemMap[it.name] = it;
     const opt = document.createElement('option');
     opt.value = it.name;

@@ -174,7 +174,7 @@
   .pc-name { font-weight: 600; font-size: 18px; line-height: 1.2; }
   .pc-sub { color: #9a9ea8; font-size: 13px; margin-top: 6px; }
   
-  .pc-close { position: absolute; top: 16px; right: 16px; background: none; border: none; color: #9a9ea8; font-size: 24px; cursor: pointer; padding: 4px; line-height: 1; }
+  .pc-close { position: absolute top: 16px; right: 16px; background: none; border: none; color: #9a9ea8; font-size: 24px; cursor: pointer; padding: 4px; line-height: 1; }
   .pc-close:hover { color: #fff; }
 
   .pc-body { padding: 0 20px; }
@@ -1156,10 +1156,6 @@ document.getElementById('pcBigAddBtn').onclick = () => {
   document.getElementById('modalSubmit').click();
 };
 
-// Maps a temp id -> the in-flight add's promise (resolves to the real server id, or throws).
-// Lets a rapid remove-right-after-add wait for the real id instead of hitting a 404.
-const pendingAdds = {};
-
 document.getElementById('modalSubmit').onclick = async () => {
   const itemName = resolveItemName(document.getElementById('modalItemInput').value);
   const rarity = document.getElementById('modalRarity').value;
@@ -1167,6 +1163,7 @@ document.getElementById('modalSubmit').onclick = async () => {
   const cardErrEl = document.getElementById('cardError');
   errEl.style.display = 'none';
   cardErrEl.style.display = 'none';
+  
   if (!itemName || !modalItemMap[itemName]) {
     errEl.textContent = 'Pick an item from the list.';
     errEl.style.display = 'block';
@@ -1174,22 +1171,9 @@ document.getElementById('modalSubmit').onclick = async () => {
   }
   const token = localStorage.getItem('sf_token');
 
-  // Optimistic: build a placeholder from data we already have client-side, show it and close
-  // the modal immediately - don't make them wait on the network round trip to see it land.
-  const entry = modalItemMap[itemName];
-  const tempId = 'temp-' + Date.now();
-  const optimisticItem = {
-    id: tempId, name: itemName, category: entry.category, level: entry.level,
-    classes: entry.classes, rarity, affixes: [...modalSelectedAffixes],
-    owner_id: currentUser.id, owner_name: currentUser.ingame_name || currentUser.username,
-    status: 'available', borrower_id: null, borrower_name: null, borrowed_at: null,
-    added_at: new Date().toISOString(),
-  };
-  items.push(optimisticItem);
   closeAddModal();
-  render();
 
-  const addPromise = (async () => {
+  try {
     const r = await fetch(`${API_BASE}/api/items/add`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -1197,28 +1181,15 @@ document.getElementById('modalSubmit').onclick = async () => {
     });
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || 'Something went wrong.');
+    
     if (!data.synced) {
-      // The backend already retried a few times - this means it genuinely couldn't reach
-      // GitHub, not just a momentary clash with another write. Worth knowing about.
       console.warn('Item saved locally but failed to sync to GitHub after retries:', data.item?.name);
     }
-    return data.item;
-  })();
-  pendingAdds[tempId] = addPromise;
-
-  try {
-    const realItem = await addPromise;
-    // Swap the placeholder for the real record (real id, exact added_at, etc) - unless a
-    // rapid remove already deleted this temp item while we were waiting.
-    const idx = items.findIndex(x => x.id === tempId);
-    if (idx !== -1) items[idx] = realItem;
+    
+    items.push(data.item);
     render();
   } catch (e) {
-    items = items.filter(x => x.id !== tempId);
-    render();
     alert(e.message);
-  } finally {
-    delete pendingAdds[tempId];
   }
 };
 
@@ -1308,19 +1279,6 @@ document.getElementById('deleteConfirmBtn').addEventListener('click', async (e) 
   render();
 
   try {
-    // If this item is still mid-add (id is a temp placeholder), wait for the real id to come
-    // back first instead of firing a remove request against an id the backend's never heard of.
-    if (pendingAdds[id]) {
-      let realItem;
-      try {
-        realItem = await pendingAdds[id];
-      } catch {
-        // The add itself failed - it never really existed, so there's nothing to remove or
-        // roll back. The add handler's own catch already cleans up and shows that error.
-        return;
-      }
-      id = realItem.id;
-    }
     const token = localStorage.getItem('sf_token');
     const r = await fetch(`${API_BASE}/api/items/${id}/remove`, {
       method: 'POST',

@@ -205,7 +205,8 @@
   @media (max-width: 768px) {
     body { padding: 1.5rem 1rem; overflow-x: hidden; }
     h1 { font-size: 24px; }
-    .topbar { flex-direction: column; }
+    .topbar { flex-direction: column; margin-bottom: 20px; }
+    .authbox { margin-top: 4px; }
     .row { flex-wrap: wrap; }
     .row input[type=text] { flex: 1 1 100%; min-width: 0; }
     .row button.reset { flex: 1 1 auto; min-width: 0; padding: 11px 14px; }
@@ -967,11 +968,24 @@ window.addEventListener('paste', async (e) => {
   await handlePastedStats(text);
 });
 
+// If the Item box exactly matches a real item, treat this the same as a completed paste - no
+// need to have actually pasted, and no need to touch Rarity first if it's already on the right value.
+function promoteToCardIfExactMatch() {
+  const itemName = document.getElementById('modalItemInput').value;
+  if (modalItemMap[itemName]) {
+    document.getElementById('pasteWrap').style.display = 'none';
+    document.getElementById('pcBigAddBtn').style.display = 'block';
+  }
+}
+
 document.getElementById('modalItemInput').addEventListener('input', () => {
   modalSelectedAffixes.clear();
   lastParsedAffixValues = {};
   lastParsedEffects = [];
-  ensureItemMaster().then(buildModalAffixes);
+  ensureItemMaster().then(master => {
+    buildModalAffixes(master);
+    promoteToCardIfExactMatch();
+  });
 });
 
 document.getElementById('modalRarity').addEventListener('change', () => {
@@ -980,13 +994,7 @@ document.getElementById('modalRarity').addEventListener('change', () => {
   lastParsedEffects = [];
   ensureItemMaster().then(master => {
     buildModalAffixes(master);
-    // If what's typed in the Item box exactly matches a real item, treat this the same as a
-    // completed paste once rarity is picked - no need to have literally pasted to get the card.
-    const itemName = document.getElementById('modalItemInput').value;
-    if (modalItemMap[itemName]) {
-      document.getElementById('pasteWrap').style.display = 'none';
-      document.getElementById('pcBigAddBtn').style.display = 'block';
-    }
+    promoteToCardIfExactMatch();
   });
 });
 

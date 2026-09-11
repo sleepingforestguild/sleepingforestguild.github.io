@@ -436,6 +436,17 @@ const API_BASE = "https://sleepingforest-bot.onrender.com";
 const ITEMS_URL = `${API_BASE}/api/items`;
 
 let items = [];
+
+// Every add/remove goes through this. Guarantees only one mutating request is ever in flight -
+// a second click can't fire its fetch until the first one has fully finished and the DOM
+// already reflects it. This is what actually prevents the add-then-instant-remove race, not a
+// guessed timeout - it's driven by the real server response, however long that takes.
+let mutationQueue = Promise.resolve();
+function enqueueMutation(taskFn) {
+  const result = mutationQueue.then(taskFn, taskFn);
+  mutationQueue = result.catch(() => {});
+  return result;
+}
 let selType = null, selClass = null, selToolCat = null, selLevel = null;
 let mineOnly = false;
 let currentUser = null;
@@ -1173,24 +1184,31 @@ document.getElementById('modalSubmit').onclick = async () => {
 
   closeAddModal();
 
-  try {
-    const r = await fetch(`${API_BASE}/api/items/add`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ item: itemName, rarity, affixes: [...modalSelectedAffixes] }),
-    });
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error || 'Something went wrong.');
-    
-    if (!data.synced) {
-      console.warn('Item saved locally but failed to sync to GitHub after retries:', data.item?.name);
+  const addBtnEl = document.getElementById('addBtn');
+  addBtnEl.disabled = true;
+
+  await enqueueMutation(async () => {
+    try {
+      const r = await fetch(`${API_BASE}/api/items/add`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ item: itemName, rarity, affixes: [...modalSelectedAffixes] }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Something went wrong.');
+
+      if (!data.synced) {
+        console.warn('Item saved locally but failed to sync to GitHub after retries:', data.item?.name);
+      }
+
+      items.push(data.item);
+      render();
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      addBtnEl.disabled = false;
     }
-    
-    items.push(data.item);
-    render();
-  } catch (e) {
-    alert(e.message);
-  }
+  });
 };
 
 function abbreviateClasses(classes) {
@@ -1268,32 +1286,36 @@ function hideDeleteConfirm() {
 }
 document.getElementById('deleteConfirmBtn').addEventListener('click', async (e) => {
   e.stopPropagation();
-  let id = deleteConfirmItemId;
+  const id = deleteConfirmItemId;
   if (!id) return;
 
-  // Optimistic: remove from the table immediately, don't make them wait on the network round trip.
-  const removedIndex = items.findIndex(x => x.id === id);
-  const removedItem = items[removedIndex];
-  if (removedIndex !== -1) items.splice(removedIndex, 1);
-  hideDeleteConfirm();
-  render();
+  const btn = e.currentTarget;
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Removing...';
 
-  try {
-    const token = localStorage.getItem('sf_token');
-    const r = await fetch(`${API_BASE}/api/items/${id}/remove`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error || 'Something went wrong.');
-  } catch (err) {
-    // Roll back - put it back where it was and let them know it didn't actually save.
-    if (removedItem && removedIndex !== -1) {
-      items.splice(removedIndex, 0, removedItem);
+  await enqueueMutation(async () => {
+    try {
+      const token = localStorage.getItem('sf_token');
+      const r = await fetch(`${API_BASE}/api/items/${id}/remove`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Something went wrong.');
+
+      // Server confirmed - only now does it actually leave the table.
+      const removedIndex = items.findIndex(x => x.id === id);
+      if (removedIndex !== -1) items.splice(removedIndex, 1);
+      hideDeleteConfirm();
       render();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalText;
     }
-    alert(err.message);
-  }
+  });
 });
 
 function render() {

@@ -863,6 +863,7 @@ document.getElementById('addBtn').onclick = async () => {
 };
 
 async function openAddModal() {
+  hideDeleteConfirm();
   const master = await ensureItemMaster();
   modalItemMap = {};
   const list = document.getElementById('modalItemList');

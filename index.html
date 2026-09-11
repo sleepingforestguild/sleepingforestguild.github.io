@@ -1133,11 +1133,22 @@ document.getElementById('modalSubmit').onclick = async () => {
     return;
   }
   const token = localStorage.getItem('sf_token');
-  const btn = document.getElementById('modalSubmit');
-  const bigBtn = document.getElementById('pcBigAddBtn');
-  btn.disabled = true;
-  bigBtn.disabled = true;
-  
+
+  // Optimistic: build a placeholder from data we already have client-side, show it and close
+  // the modal immediately - don't make them wait on the network round trip to see it land.
+  const entry = modalItemMap[itemName];
+  const tempId = 'temp-' + Date.now();
+  const optimisticItem = {
+    id: tempId, name: itemName, category: entry.category, level: entry.level,
+    classes: entry.classes, rarity, affixes: [...modalSelectedAffixes],
+    owner_id: currentUser.id, owner_name: currentUser.ingame_name || currentUser.username,
+    status: 'available', borrower_id: null, borrower_name: null, borrowed_at: null,
+    added_at: new Date().toISOString(),
+  };
+  items.push(optimisticItem);
+  closeAddModal();
+  render();
+
   try {
     const r = await fetch(`${API_BASE}/api/items/add`, {
       method: 'POST',
@@ -1146,17 +1157,14 @@ document.getElementById('modalSubmit').onclick = async () => {
     });
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || 'Something went wrong.');
-    items.push(data.item);
-    closeAddModal();
+    // Swap the placeholder for the real record (real id, exact added_at, etc).
+    const idx = items.findIndex(x => x.id === tempId);
+    if (idx !== -1) items[idx] = data.item;
     render();
   } catch (e) {
-    errEl.textContent = e.message;
-    errEl.style.display = 'block';
-    cardErrEl.textContent = e.message;
-    cardErrEl.style.display = 'block';
-  } finally {
-    btn.disabled = false;
-    bigBtn.disabled = false;
+    items = items.filter(x => x.id !== tempId);
+    render();
+    alert(e.message);
   }
 };
 
@@ -1237,8 +1245,14 @@ document.getElementById('deleteConfirmBtn').addEventListener('click', async (e) 
   e.stopPropagation();
   const id = deleteConfirmItemId;
   if (!id) return;
-  const btn = e.currentTarget;
-  btn.disabled = true;
+
+  // Optimistic: remove from the table immediately, don't make them wait on the network round trip.
+  const removedIndex = items.findIndex(x => x.id === id);
+  const removedItem = items[removedIndex];
+  if (removedIndex !== -1) items.splice(removedIndex, 1);
+  hideDeleteConfirm();
+  render();
+
   try {
     const token = localStorage.getItem('sf_token');
     const r = await fetch(`${API_BASE}/api/items/${id}/remove`, {
@@ -1247,13 +1261,13 @@ document.getElementById('deleteConfirmBtn').addEventListener('click', async (e) 
     });
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || 'Something went wrong.');
-    items = items.filter(x => x.id !== id);
-    hideDeleteConfirm();
-    render();
   } catch (err) {
+    // Roll back - put it back where it was and let them know it didn't actually save.
+    if (removedItem && removedIndex !== -1) {
+      items.splice(removedIndex, 0, removedItem);
+      render();
+    }
     alert(err.message);
-  } finally {
-    btn.disabled = false;
   }
 });
 

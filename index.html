@@ -348,7 +348,7 @@
         <div class="pc-section">
           <div class="pc-sec-title">Requirements</div>
           <div class="pc-row">
-            <span>Combat Level</span>
+            <span id="pcLevelLabel">Combat Level</span>
             <span class="pc-val-green" id="pcLevel"></span>
           </div>
           <div class="pc-row" id="pcClassRow" style="display:none;">
@@ -384,7 +384,7 @@
 const ITEMS_URL = "https://raw.githubusercontent.com/darkblisss/sleepingforest-bot/main/items.json?cb=" + Date.now();
 
 const RARITY_COLORS = {
-  Uncommon: "#4ade80", Rare: "#60a5fa", Epic: "#c084fc",
+  Common: "#d1d5db", Uncommon: "#4ade80", Rare: "#60a5fa", Epic: "#c084fc",
   Legendary: "#fb923c", Mythic: "#f472b6"
 };
 
@@ -690,6 +690,11 @@ const TOOL_FOLDERS_ICON = {
   Pickaxe: "Pickaxes", Axe: "Axes", Trap: "Traps",
   "Fishing Rod": "Fishingrods", Basket: "Baskets", Pouch: "Pouches",
 };
+// Tools don't have a Combat Level requirement - they gate on their matching gathering skill instead.
+const TOOL_SKILL_LABEL = {
+  Pickaxe: "Mining", Axe: "Woodcutting", Trap: "Tracking",
+  "Fishing Rod": "Fishing", Basket: "Gathering", Pouch: "Herbalism",
+};
 const LEATHER_TOP3_TIER = { Shadowhide: "shadow", Dragonhide: "dragon", Abyssal: "abyssal" };
 const ICON_SLUG_OVERRIDES = { "Leather Bow": "t1leatherworkingbow" };
 const ICON_TYPO_FIX = { "abyssalleatherbodyarmor": "abyysalleatherbodyarmor" }; 
@@ -705,6 +710,16 @@ function iconArchetype(classes) {
   return null;
 }
 
+// Shadowhide/Dragonhide/Abyssal drop "Leather" in the display name, but the asset filename keeps
+// it (and drops "hide") - e.g. "Dragonhide Pouch" -> dragonleatherpouch.png. Applies to every
+// Leatherworking category that has this quirk: Hat/Bodyarmor/Gloves/Boots AND Pouch.
+function leatherTop3Slug(name, category) {
+  const top3 = Object.keys(LEATHER_TOP3_TIER).find(t => name.startsWith(t));
+  if (!top3) return null;
+  const slug = iconSlugify(`${LEATHER_TOP3_TIER[top3]}leather${category}`);
+  return ICON_TYPO_FIX[slug] || slug;
+}
+
 function getIconUrl(item) {
   if (!item) return null;
   const { name, category, classes } = item;
@@ -712,7 +727,8 @@ function getIconUrl(item) {
     return `https://cdn.degenidle.com/Crafting/Accessories/${iconSlugify(name)}.png`;
   }
   if (TOOL_FOLDERS_ICON[category]) {
-    return `https://cdn.degenidle.com/Crafting/Tools/${TOOL_FOLDERS_ICON[category]}/${iconSlugify(name)}.png`;
+    const slug = leatherTop3Slug(name, category) || iconSlugify(name);
+    return `https://cdn.degenidle.com/Crafting/Tools/${TOOL_FOLDERS_ICON[category]}/${slug}.png`;
   }
   if (category === 'Bow') {
     const slug = ICON_SLUG_OVERRIDES[name] || iconSlugify(name);
@@ -731,11 +747,7 @@ function getIconUrl(item) {
     return `https://cdn.degenidle.com/Tailoring/Armor/${iconSlugify(n)}.png`;
   }
   if (arch === 'Ranger') {
-    const top3 = Object.keys(LEATHER_TOP3_TIER).find(t => name.startsWith(t));
-    let slug = top3
-      ? iconSlugify(`${LEATHER_TOP3_TIER[top3]}leather${category}`)
-      : iconSlugify(name);
-    slug = ICON_TYPO_FIX[slug] || slug;
+    const slug = leatherTop3Slug(name, category) || iconSlugify(name);
     return `https://cdn.degenidle.com/Leatherworking/Armor/${slug}.png`;
   }
   return null;
@@ -935,6 +947,7 @@ async function handlePastedStats(text) {
   const arch = iconArchetype(entry.classes) || 'Accessory';
   const profession = PROFESSION_LABEL[arch] || 'Crafting';
   document.getElementById('pcSubtitle').textContent = `${parsed.rarity || 'Common'} ${entry.category} \u00B7 ${profession} Lv. ${entry.level}`;
+  document.getElementById('pcLevelLabel').textContent = (TOOL_SKILL_LABEL[entry.category] || 'Combat') + ' Level';
   document.getElementById('pcLevel').textContent = entry.level;
 
   if (entry.classes && entry.classes.length) {

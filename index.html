@@ -690,13 +690,34 @@ const TOOL_FOLDERS_ICON = {
   Pickaxe: "Pickaxes", Axe: "Axes", Trap: "Traps",
   "Fishing Rod": "Fishingrods", Basket: "Baskets", Pouch: "Pouches",
 };
+const TOOL_CATEGORIES = new Set(Object.keys(TOOL_FOLDERS_ICON));
+
+// Common is only a real rarity for Tools - weapons/armor never drop as Common in-game.
+// Rebuilds the Rarity <select> options based on whichever item is currently typed/pasted,
+// preserving the current selection if it's still a valid option, else defaulting to the first.
+function buildRarityOptions(master) {
+  const raritySel = document.getElementById('modalRarity');
+  const currentValue = raritySel.value;
+  const entry = modalItemMap[resolveItemName(document.getElementById('modalItemInput').value)];
+  const isTool = entry && TOOL_CATEGORIES.has(entry.category);
+  const options = isTool ? master.rarities : master.rarities.filter(r => r !== 'Common');
+  raritySel.innerHTML = '';
+  options.forEach(r => {
+    const opt = document.createElement('option');
+    opt.value = r; opt.textContent = r;
+    raritySel.appendChild(opt);
+  });
+  raritySel.value = options.includes(currentValue) ? currentValue : options[0];
+}
 // Tools don't have a Combat Level requirement - they gate on their matching gathering skill instead.
 const TOOL_SKILL_LABEL = {
   Pickaxe: "Mining", Axe: "Woodcutting", Trap: "Tracking",
   "Fishing Rod": "Fishing", Basket: "Gathering", Pouch: "Herbalism",
 };
 const LEATHER_TOP3_TIER = { Shadowhide: "shadow", Dragonhide: "dragon", Abyssal: "abyssal" };
-const ICON_SLUG_OVERRIDES = { "Leather Bow": "t1leatherworkingbow" };
+const ENDGAME_TIER_NUM = { Cursed: 1, Abyssal: 2, Corrupted: 3 };
+const ICON_FULL_URL_OVERRIDES = { "Abyssal Pouch": "https://cdn.degenidle.com/Leatherworking/abyssalleather.png" };
+const ICON_SLUG_OVERRIDES = { "Leather Bow": "t1leatherworkingbow", "Wool Hat": "t1tailoringhat" };
 const ICON_TYPO_FIX = { "abyssalleatherbodyarmor": "abyysalleatherbodyarmor" }; 
 
 function iconSlugify(s) { return s.replace(/\s+/g, '').toLowerCase(); }
@@ -723,6 +744,41 @@ function leatherTop3Slug(name, category) {
 function getIconUrl(item) {
   if (!item) return null;
   const { name, category, classes } = item;
+
+  // Full-URL overrides for items that don't follow any folder/slug pattern at all.
+  // Abyssal Pouch: given as "https://cdn.degenidle.com/Leatherworking/abyssalleather.png" -
+  // note this filename literally says "leather" not "pouch" and sits directly under
+  // Leatherworking/ with no Armor or Tools subfolder, which is unlike every other Pouch tier.
+  // Worth a second look if it still looks wrong in the card - it may be reusing the raw
+  // "Abyssal Leather" material's icon rather than having a dedicated Pouch icon.
+  if (ICON_FULL_URL_OVERRIDES[name]) return ICON_FULL_URL_OVERRIDES[name];
+
+  // Endgame gear (Cursed/Corrupted/Abyssal Bastion/Invoker/Slayer) uses a numbered tier filename
+  // instead of the tier word - CONFIRMED for Bastion/Forging (t1/t2forgingshield, t1forgingbodyarmor).
+  // Invoker/Slayer below extrapolate the same pattern and are UNVERIFIED - re-run check_icons.py
+  // after adding these items and report anything that still 404s.
+  const endgameMatch = name.match(/^(Cursed|Corrupted|Abyssal) (Bastion|Invoker|Slayer) (.+)$/);
+  if (endgameMatch) {
+    const tierNum = ENDGAME_TIER_NUM[endgameMatch[1]];
+    const suffix = endgameMatch[2];
+    if (suffix === 'Bastion') {
+      const folder = (category === 'Sword' || category === 'Shield') ? 'Weapons' : 'Armor';
+      return `https://cdn.degenidle.com/Blacksmithing/${folder}/t${tierNum}forging${iconSlugify(category)}.png`;
+    }
+    if (suffix === 'Invoker') {
+      if (category === 'Staff') {
+        return `https://cdn.degenidle.com/Crafting/Staff/t${tierNum}tailoring${iconSlugify(category)}.png`;
+      }
+      return `https://cdn.degenidle.com/Tailoring/Armor/t${tierNum}tailoring${iconSlugify(category)}.png`;
+    }
+    if (suffix === 'Slayer') {
+      if (category === 'Bow') {
+        return `https://cdn.degenidle.com/Crafting/Bow/t${tierNum}leatherworking${iconSlugify(category)}.png`;
+      }
+      return `https://cdn.degenidle.com/Leatherworking/Armor/t${tierNum}leatherworking${iconSlugify(category === 'Hat' ? 'hood' : category)}.png`;
+    }
+  }
+
   if (category === 'Ring' || category === 'Amulet') {
     return `https://cdn.degenidle.com/Crafting/Accessories/${iconSlugify(name)}.png`;
   }
@@ -744,6 +800,13 @@ function getIconUrl(item) {
   }
   if (arch === 'Mage') {
     const n = /^Mystic\b/.test(name) ? name.replace(/^Mystic/, 'Celestial') : name;
+    if (category === 'Hat') {
+      // Hat assets use a "wizardhat" suffix instead of the plain category word, except tier 1
+      // (Wool) which has its own irregular name, already caught by ICON_SLUG_OVERRIDES above.
+      const tierWord = n.replace(/\s*Hat$/, '');
+      const slug = ICON_SLUG_OVERRIDES[name] || iconSlugify(`${tierWord}wizardhat`);
+      return `https://cdn.degenidle.com/Tailoring/Armor/${slug}.png`;
+    }
     return `https://cdn.degenidle.com/Tailoring/Armor/${iconSlugify(n)}.png`;
   }
   if (arch === 'Ranger') {
@@ -793,14 +856,8 @@ async function openAddModal() {
     opt.value = it.name;
     list.appendChild(opt);
   });
-  const raritySel = document.getElementById('modalRarity');
-  raritySel.innerHTML = '';
-  master.rarities.forEach(r => {
-    const opt = document.createElement('option');
-    opt.value = r; opt.textContent = r;
-    raritySel.appendChild(opt);
-  });
-  raritySel.selectedIndex = 0;
+  document.getElementById('modalItemInput').value = '';
+  buildRarityOptions(master);
   
   // Reset UI back to manual form
   document.querySelector('.modal').classList.remove('card-mode');
@@ -808,7 +865,6 @@ async function openAddModal() {
   document.getElementById('previewCard').style.display = 'none';
 
   document.getElementById('modalPasteBox').value = '';
-  document.getElementById('modalItemInput').value = '';
   document.getElementById('modalError').style.display = 'none';
   document.getElementById('cardError').style.display = 'none';
   modalSelectedAffixes.clear();
@@ -927,7 +983,11 @@ async function handlePastedStats(text) {
   
   // Safely seed the background form values so our submission triggers seamlessly
   document.getElementById('modalItemInput').value = parsed.itemName;
-  if (parsed.rarity) document.getElementById('modalRarity').value = parsed.rarity;
+  buildRarityOptions(master);
+  // Real in-game text omits the rarity word entirely for Common items - if nothing matched
+  // during parsing, that IS the signal it's Common (only valid for Tools, which is exactly
+  // what buildRarityOptions just made available above).
+  document.getElementById('modalRarity').value = parsed.rarity || 'Common';
   updateSubmitState();
   
   const entry = modalItemMap[parsed.itemName];
@@ -1029,7 +1089,10 @@ window.addEventListener('paste', async (e) => {
 
 document.getElementById('modalItemInput').addEventListener('input', () => {
   modalSelectedAffixes.clear();
-  ensureItemMaster().then(buildModalAffixes);
+  ensureItemMaster().then(master => {
+    buildRarityOptions(master);
+    buildModalAffixes(master);
+  });
 });
 
 document.getElementById('modalRarity').addEventListener('change', () => {

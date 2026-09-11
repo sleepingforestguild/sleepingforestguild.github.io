@@ -153,6 +153,7 @@
   .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
   .btn-cancel { background: var(--bg); border: 1px solid var(--border); color: var(--text); }
   .modal-error { color: #f87171; font-size: 13px; margin-top: 10px; display: none; }
+  .modal-hint { color: var(--text-muted); font-size: 12px; margin: 6px 0 0; }
 
   /* Either/Or Full Card View Styles */
   #previewCard { display: none; width: 100%; }
@@ -310,6 +311,7 @@
       <label>Item</label>
       <input type="text" id="modalItemInput" list="modalItemList" placeholder="Start typing an item name...">
       <datalist id="modalItemList"></datalist>
+      <p class="modal-hint" id="modalItemHint" style="display:none;">No matching item - pick one from the suggestions or check the spelling.</p>
 
       <label>Rarity</label>
       <select id="modalRarity"></select>
@@ -745,6 +747,15 @@ let itemMasterCache = null;
 let modalSelectedAffixes = new Set();
 let modalItemMap = {};
 
+// Resolves whatever's typed to the exact-cased item name, case-insensitively - so "nyxium helmet"
+// still matches "Nyxium Helmet" even if it wasn't picked from the datalist suggestions.
+function resolveItemName(text) {
+  if (!text) return null;
+  if (modalItemMap[text]) return text;
+  const lower = text.toLowerCase();
+  return Object.keys(modalItemMap).find(name => name.toLowerCase() === lower) || null;
+}
+
 async function ensureItemMaster() {
   if (itemMasterCache) return itemMasterCache;
   const r = await fetch(`${API_BASE}/api/item-master`);
@@ -793,13 +804,24 @@ async function openAddModal() {
   document.getElementById('modalPasteBox').focus();
 }
 
+function updateSubmitState() {
+  const text = document.getElementById('modalItemInput').value;
+  const valid = !!resolveItemName(text);
+  document.getElementById('modalSubmit').disabled = !valid;
+  const bigBtn = document.getElementById('pcBigAddBtn');
+  if (bigBtn) bigBtn.disabled = !valid;
+  // Only nag once they've actually typed something that doesn't match - not on the empty default state.
+  document.getElementById('modalItemHint').style.display = (text.trim() && !valid) ? 'block' : 'none';
+}
+
 function buildModalAffixes(master) {
   const wrap = document.getElementById('modalAffixWrap');
   const affixEl = document.getElementById('modalAffixes');
   affixEl.innerHTML = '';
-  const entry = modalItemMap[document.getElementById('modalItemInput').value];
+  const entry = modalItemMap[resolveItemName(document.getElementById('modalItemInput').value)];
   const rarity = document.getElementById('modalRarity').value;
   const pool = entry ? (master.affixPools[entry.category] || []) : [];
+  updateSubmitState();
   if (!entry || pool.length === 0) { wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
   const cap = master.rarityAffixCap[rarity] || 4;
@@ -892,6 +914,7 @@ async function handlePastedStats(text) {
   // Safely seed the background form values so our submission triggers seamlessly
   document.getElementById('modalItemInput').value = parsed.itemName;
   if (parsed.rarity) document.getElementById('modalRarity').value = parsed.rarity;
+  updateSubmitState();
   
   const entry = modalItemMap[parsed.itemName];
   
@@ -1012,13 +1035,13 @@ document.getElementById('pcBigAddBtn').onclick = () => {
 };
 
 document.getElementById('modalSubmit').onclick = async () => {
-  const itemName = document.getElementById('modalItemInput').value;
+  const itemName = resolveItemName(document.getElementById('modalItemInput').value);
   const rarity = document.getElementById('modalRarity').value;
   const errEl = document.getElementById('modalError');
   const cardErrEl = document.getElementById('cardError');
   errEl.style.display = 'none';
   cardErrEl.style.display = 'none';
-  if (!modalItemMap[itemName]) {
+  if (!itemName || !modalItemMap[itemName]) {
     errEl.textContent = 'Pick an item from the list.';
     errEl.style.display = 'block';
     return;

@@ -35,11 +35,12 @@
   }
   button.reset:hover { border-color: var(--accent); }
   button.reset.active { background: rgba(124,140,248,.15); border-color: var(--accent); color: var(--accent); }
-  #resetBtn { position: relative; }
+  #resetBtn { position: relative; overflow: visible; }
   .filter-badge {
-    position: absolute; top: -22px; right: 0; white-space: nowrap;
+    position: absolute; top: -8px; right: -8px; z-index: 1;
+    min-width: 20px; height: 20px; padding: 0 5px; line-height: 20px;
     background: var(--accent); color: #0d0f14; font-size: 11px; font-weight: 700;
-    padding: 3px 9px; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,.4);
+    border-radius: 10px; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,.5);
     pointer-events: none;
   }
   .label { font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; margin: 0 0 10px; }
@@ -262,10 +263,45 @@
     h1 { font-size: 24px; }
     .topbar { flex-direction: column; margin-bottom: 20px; }
     .authbox { margin-top: 4px; }
-    .row { flex-wrap: wrap; }
-    .row input[type=text] { flex: 1 1 100%; min-width: 0; }
-    .row button.reset { flex: 0 0 auto; min-width: 0; padding: 11px 14px; }
+    .row {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+      grid-template-areas: "search search" "mine add" "reset reset";
+    }
+    .row.rented-active { grid-template-areas: "search search" "mine add" "reset rented"; }
+    .row input[type=text] { grid-area: search; }
+    #mineBtn { grid-area: mine; }
+    #addBtn { grid-area: add; }
+    #resetBtn { grid-area: reset; }
+    #rentedOnlyBtn { grid-area: rented; }
+    .row button.reset { min-width: 0; padding: 11px 14px; width: 100%; }
     thead th { position: static; }
+
+    /* Mobile card layout: each row becomes a stacked card instead of a horizontally-
+       scrolled table. Item+Status share a header line, Affixes gets its own full-width
+       section, and Category/Class/Added by become a small labeled 3-column footer -
+       without labels there, three plain small-text values side by side would be genuinely
+       hard to tell apart (which one's the class vs. the owner name?). */
+    .tablewrap { background: transparent; border: none; }
+    .tablewrap table, .tablewrap thead, .tablewrap tbody { display: block; }
+    .tablewrap thead { display: none; }
+    .tablewrap tbody tr {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px 10px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      margin-bottom: 12px; padding: 14px 16px;
+    }
+    .tablewrap tbody td { display: block; padding: 0; border-bottom: none; white-space: normal; }
+    .tablewrap tbody td:nth-child(1) { grid-column: 1 / 3; grid-row: 1; align-self: center; }
+    .tablewrap tbody td:nth-child(6) { grid-column: 3; grid-row: 1; justify-self: end; align-self: center; }
+    .tablewrap tbody td:nth-child(5) { grid-column: 1 / -1; grid-row: 2; }
+    .tablewrap tbody td:nth-child(2) { grid-column: 1; grid-row: 3; }
+    .tablewrap tbody td:nth-child(3) { grid-column: 2; grid-row: 3; }
+    .tablewrap tbody td:nth-child(4) { grid-column: 3; grid-row: 3; }
+    .tablewrap tbody td[data-label]::before {
+      content: attr(data-label); display: block; font-size: 10px; text-transform: uppercase;
+      letter-spacing: .04em; color: var(--text-muted); margin-bottom: 2px;
+    }
+    .affixlist { flex-wrap: wrap; }
+    .itemname { white-space: normal; }
   }
 </style>
 </head>
@@ -746,7 +782,7 @@ document.getElementById('resetBtn').onclick = () => {
   mineOnly = false; rentedOnly = false; columnSort = null;
   document.getElementById('mineBtn').classList.remove('active');
   document.getElementById('rentedOnlyBtn').classList.remove('active');
-  document.getElementById('rentedOnlyBtn').style.display = 'none';
+  syncRentedButtonLayout();
   document.getElementById('search').value = '';
   currentPage = 1;
   [...typeEl.children].forEach(b => b.classList.remove('active'));
@@ -802,7 +838,8 @@ function updateActiveFilterBadge() {
   if (rentedOnly) count++;
   const badge = document.getElementById('activeFilterBadge');
   if (count > 0) {
-    badge.textContent = `${count} active filter${count === 1 ? '' : 's'}`;
+    badge.textContent = String(count);
+    badge.title = `${count} active filter${count === 1 ? '' : 's'}`;
     badge.style.display = 'block';
   } else {
     badge.style.display = 'none';
@@ -843,6 +880,15 @@ async function loadUser() {
   renderAuthBox();
 }
 
+// Keeps rentedOnlyBtn's visibility AND the row's mobile grid layout in sync with mineOnly,
+// from a single place - the desktop position (right after search) and the mobile grid
+// (My Items/Add Item always fixed; Reset alone spans full width until Rented Only joins it)
+// both key off the exact same condition, so this stops the two from ever drifting apart.
+function syncRentedButtonLayout() {
+  document.getElementById('rentedOnlyBtn').style.display = mineOnly ? 'inline-block' : 'none';
+  document.querySelector('.row').classList.toggle('rented-active', mineOnly);
+}
+
 function renderAuthBox() {
   const box = document.getElementById('authBox');
   const mineBtn = document.getElementById('mineBtn');
@@ -861,7 +907,7 @@ function renderAuthBox() {
       currentUser = null; mineOnly = false; rentedOnly = false;
       mineBtn.classList.remove('active');
       rentedBtn.classList.remove('active');
-      rentedBtn.style.display = 'none';
+      syncRentedButtonLayout();
       renderAuthBox(); render();
     };
     if (currentUser.linked) {
@@ -870,14 +916,14 @@ function renderAuthBox() {
       removeHint.style.display = 'block';
       linkHint.style.display = 'none';
       mineBtn.classList.toggle('active', mineOnly);
-      rentedBtn.style.display = mineOnly ? 'inline-block' : 'none';
+      syncRentedButtonLayout();
       rentedBtn.classList.toggle('active', rentedOnly);
     } else {
       mineBtn.style.display = 'none';
       mineOnly = false;
       mineBtn.classList.remove('active');
       rentedOnly = false;
-      rentedBtn.style.display = 'none';
+      syncRentedButtonLayout();
       rentedBtn.classList.remove('active');
       addBtn.style.display = 'none';
       removeHint.style.display = 'none';
@@ -888,24 +934,23 @@ function renderAuthBox() {
     box.innerHTML = `<button class="btn-discord" id="loginBtn">Log in with Discord</button>`;
     document.getElementById('loginBtn').onclick = () => { window.location.href = `${API_BASE}/auth/discord/login`; };
     mineBtn.style.display = 'none';
-    rentedBtn.style.display = 'none';
     addBtn.style.display = 'none';
     removeHint.style.display = 'none';
     linkHint.style.display = 'none';
     mineOnly = false;
     rentedOnly = false;
+    syncRentedButtonLayout();
   }
 }
 
-// Rented Only sits at the very end of the row (after Reset) specifically so that it
-// appearing/disappearing when My Items toggles only ever extends or shrinks the tail of
-// the row - it never shifts My Items, Add Item, or Reset out of place.
+// Rented Only sits right after the search box on desktop (so the search box absorbs its
+// width and My Items/Add Item/Reset never shift), and joins Reset on the bottom row on
+// mobile (Reset alone spans full width until Rented Only appears, then they split evenly).
 document.getElementById('mineBtn').onclick = () => {
   mineOnly = !mineOnly;
   document.getElementById('mineBtn').classList.toggle('active', mineOnly);
-  const rentedBtn = document.getElementById('rentedOnlyBtn');
-  rentedBtn.style.display = mineOnly ? 'inline-block' : 'none';
-  if (!mineOnly) { rentedOnly = false; rentedBtn.classList.remove('active'); }
+  syncRentedButtonLayout();
+  if (!mineOnly) { rentedOnly = false; document.getElementById('rentedOnlyBtn').classList.remove('active'); }
   currentPage = 1;
   render();
 };
@@ -1741,9 +1786,9 @@ function render() {
           ${isNew ? '<span class="newbadge">New</span>' : ''}
         </div>
       </td>
-      <td class="muted">${escapeHtml(i.category || '')}</td>
-      <td class="muted">${escapeHtml(abbreviateClasses(i.classes))}</td>
-      <td class="muted">${escapeHtml(i.owner_name || '')}</td>
+      <td class="muted" data-label="Category">${escapeHtml(i.category || '')}</td>
+      <td class="muted" data-label="Class">${escapeHtml(abbreviateClasses(i.classes))}</td>
+      <td class="muted" data-label="Added by">${escapeHtml(i.owner_name || '')}</td>
       <td><div class="affixlist">${(i.affixes || []).map(a => `<span class="affix">${escapeHtml(a)}</span>`).join('')}</div></td>
       <td><span class="status${statusClickable ? ' clickable' : ''}"${statusAction ? ` data-id="${i.id}" data-action="${statusAction}" data-title="${escapeHtml(statusTitle)}"` : ''}><span class="dot" style="background:${statusColor}"></span>${statusLabel}</span></td>
     `;

@@ -16,6 +16,7 @@
     --rarity-epic: #c084fc; --rarity-legendary: #fb923c; --rarity-mythic: #f472b6;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  button:focus:not(:focus-visible) { outline: none; }
   body {
     background: var(--bg); color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -109,6 +110,7 @@
   .status[data-tooltip] { cursor: pointer; }
   .status.clickable { cursor: pointer; }
   .status[tabindex]:focus { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+  .status[tabindex]:focus:not(:focus-visible) { outline: none; }
   .search-highlight { background: rgba(124,140,248,.35); color: inherit; border-radius: 3px; padding: 0 1px; }
   .tooltip-fixed {
     position: fixed; display: none; background: #000; color: #fff; padding: 6px 10px;

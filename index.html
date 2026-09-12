@@ -12,6 +12,8 @@
     --bg: #0d0f14; --surface: #161922; --border: #2a2e3a;
     --text: #e8e9ed; --text-secondary: #9a9ea8; --text-muted: #6b6f7a;
     --accent: #7c8cf8;
+    --rarity-common: #d1d5db; --rarity-uncommon: #4ade80; --rarity-rare: #60a5fa;
+    --rarity-epic: #c084fc; --rarity-legendary: #fb923c; --rarity-mythic: #f472b6;
   }
   * { box-sizing: border-box; }
   body {
@@ -247,7 +249,7 @@
     .authbox { margin-top: 4px; }
     .row { flex-wrap: wrap; }
     .row input[type=text] { flex: 1 1 100%; min-width: 0; }
-    .row button.reset { flex: 1 1 auto; min-width: 0; padding: 11px 14px; }
+    .row button.reset { flex: 0 0 auto; min-width: 0; padding: 11px 14px; }
     thead th { position: static; }
   }
 </style>
@@ -266,10 +268,10 @@
 
   <div class="row">
     <input type="text" id="search" placeholder="Search items...">
+    <button class="reset" id="rentedOnlyBtn" style="display:none;">Rented Only</button>
     <button class="reset" id="mineBtn" style="display:none;">My Items</button>
     <button class="reset" id="addBtn" style="display:none;">+ Add Item</button>
     <button class="reset" id="resetBtn">Reset</button>
-    <button class="reset" id="rentedOnlyBtn" style="display:none;">Rented Only</button>
   </div>
 
   <p class="label">Type</p>
@@ -424,10 +426,13 @@
 </div>
 
 <script>
-const RARITY_COLORS = {
-  Common: "#d1d5db", Uncommon: "#4ade80", Rare: "#60a5fa", Epic: "#c084fc",
-  Legendary: "#fb923c", Mythic: "#f472b6"
-};
+// Rarity colors now live as CSS variables in :root (--rarity-common etc.) instead of being
+// hardcoded here - this just maps a rarity name to its variable reference, with the same
+// gray fallback the old RARITY_COLORS object gave for anything unrecognized.
+function rarityColorVar(rarity) {
+  const slug = (rarity || '').toLowerCase();
+  return `var(--rarity-${slug}, #9a9ea8)`;
+}
 
 const ARCHETYPES = {
   Warrior: ["Guardian","Berserker"],
@@ -1161,7 +1166,7 @@ async function handlePastedStats(text) {
   document.querySelector('.modal').classList.add('card-mode');
   document.getElementById('previewCard').style.display = 'block';
   
-  const borderColor = RARITY_COLORS[parsed.rarity || 'Common'] || 'var(--border)';
+  const borderColor = rarityColorVar(parsed.rarity || 'Common');
   document.getElementById('pcIcon').src = getIconUrl(entry) || PLACEHOLDER_ICON;
   document.getElementById('pcIcon').style.borderColor = borderColor;
   document.getElementById('pcLv').textContent = `Lv.${entry.level}`;
@@ -1623,7 +1628,7 @@ function render() {
   hideActionConfirm();
   const canManage = currentUser && currentUser.linked;
   pageItems.forEach(i => {
-    const rarityColor = RARITY_COLORS[i.rarity] || '#9a9ea8';
+    const rarityColor = rarityColorVar(i.rarity);
     const isNew = isItemNew(i);
     const statusColor = i.status === 'available' ? '#4ade80' : '#f87171';
     const statusLabel = i.status ? i.status.charAt(0).toUpperCase() + i.status.slice(1) : 'Unknown';
@@ -1636,13 +1641,19 @@ function render() {
     }
     const canRequestBorrow = canManage && i.status === 'available' && !isMine;
     const canRequestReturn = canManage && i.status === 'rented' && isBorrower;
-    const statusClickable = statusTitle || canRequestBorrow || canRequestReturn;
+    // Exactly one of these applies per row, same as the old if/else-if chain - encoded as a
+    // single data-action value the delegated click handler below switches on.
+    let statusAction = '';
+    if (statusTitle) statusAction = 'tooltip';
+    else if (canRequestBorrow) statusAction = 'borrow';
+    else if (canRequestReturn) statusAction = 'return';
+    const statusClickable = !!statusAction;
     const canRemoveThis = canManage && (i.owner_id === currentUser.id || currentUser.officer);
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>
         <div class="itemname">
-          <span class="item-text${canRemoveThis ? ' clickable' : ''}" style="color:${rarityColor}">${escapeHtml(i.name)}</span>
+          <span class="item-text${canRemoveThis ? ' clickable' : ''}" style="color:${rarityColor}"${canRemoveThis ? ` data-id="${i.id}" data-action="delete"` : ''}>${escapeHtml(i.name)}</span>
           ${isNew ? '<span class="newbadge">New</span>' : ''}
         </div>
       </td>
@@ -1650,47 +1661,43 @@ function render() {
       <td class="muted">${escapeHtml(abbreviateClasses(i.classes))}</td>
       <td class="muted">${escapeHtml(i.owner_name || '')}</td>
       <td><div class="affixlist">${(i.affixes || []).map(a => `<span class="affix">${escapeHtml(a)}</span>`).join('')}</div></td>
-      <td><span class="status${statusClickable ? ' clickable' : ''}" ${statusTitle ? `data-tooltip="${escapeHtml(statusTitle)}"` : ''}><span class="dot" style="background:${statusColor}"></span>${statusLabel}</span></td>
+      <td><span class="status${statusClickable ? ' clickable' : ''}"${statusAction ? ` data-id="${i.id}" data-action="${statusAction}" data-title="${escapeHtml(statusTitle)}"` : ''}><span class="dot" style="background:${statusColor}"></span>${statusLabel}</span></td>
     `;
-    const statusEl = tr.querySelector('.status');
-    if (statusTitle) {
-      statusEl.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const isOpen = tooltipEl.style.display === 'block' && tooltipEl.dataset.owner === i.id;
-        if (isOpen) { hideTooltip(); return; }
-        tooltipEl.dataset.owner = i.id;
-        showTooltip(statusEl, statusTitle);
-      });
-    } else if (canRequestBorrow) {
-      statusEl.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (actionInProgress) return;
-        if (actionConfirmItemId === i.id) { hideActionConfirm(); return; }
-        showActionConfirm(statusEl, i.id, 'Request to borrow?', 'Request', () => requestBorrow(i.id));
-      });
-    } else if (canRequestReturn) {
-      statusEl.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (actionInProgress) return;
-        if (actionConfirmItemId === i.id) { hideActionConfirm(); return; }
-        const d = i.borrowed_at ? new Date(i.borrowed_at).toLocaleDateString() : '';
-        showActionConfirm(statusEl, i.id, `Rented by you${d ? ' on ' + d : ''}. Return?`, 'Return', () => requestReturn(i.id));
-      });
-    }
-    if (canRemoveThis) {
-      const nameEl = tr.querySelector('.item-text.clickable');
-      if (nameEl) {
-        nameEl.addEventListener('click', (e) => {
-          e.stopPropagation();
-          if (removeInProgress) return;
-          if (deleteConfirmItemId === i.id) { hideDeleteConfirm(); return; }
-          showDeleteConfirm(nameEl, i.id);
-        });
-      }
-    }
     rows.appendChild(tr);
   });
 }
+
+// Single delegated listener replaces the old per-row listeners (one pair per row before this).
+// Clicks bubble up from whichever element was actually clicked to #rows, where data-action/
+// data-id on that element tell us what to do - same behaviors as before, just one listener
+// total instead of up to 2 per row.
+document.getElementById('rows').addEventListener('click', (e) => {
+  const target = e.target.closest('[data-action]');
+  if (!target || actionInProgress) return;
+  const action = target.dataset.action;
+  const id = target.dataset.id;
+  const item = items.find(x => x.id === id);
+  if (!item) return;
+  e.stopPropagation();
+
+  if (action === 'delete') {
+    if (removeInProgress) return;
+    if (deleteConfirmItemId === id) { hideDeleteConfirm(); return; }
+    showDeleteConfirm(target, id);
+  } else if (action === 'tooltip') {
+    const isOpen = tooltipEl.style.display === 'block' && tooltipEl.dataset.owner === id;
+    if (isOpen) { hideTooltip(); return; }
+    tooltipEl.dataset.owner = id;
+    showTooltip(target, target.dataset.title);
+  } else if (action === 'borrow') {
+    if (actionConfirmItemId === id) { hideActionConfirm(); return; }
+    showActionConfirm(target, id, 'Request to borrow?', 'Request', () => requestBorrow(id));
+  } else if (action === 'return') {
+    if (actionConfirmItemId === id) { hideActionConfirm(); return; }
+    const d = item.borrowed_at ? new Date(item.borrowed_at).toLocaleDateString() : '';
+    showActionConfirm(target, id, `Rented by you${d ? ' on ' + d : ''}. Return?`, 'Return', () => requestReturn(id));
+  }
+});
 
 function renderLoadingSkeleton(rowCount = 8) {
   const rows = document.getElementById('rows');

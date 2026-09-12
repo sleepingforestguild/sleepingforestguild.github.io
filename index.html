@@ -54,6 +54,7 @@
   tbody td { padding: 14px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; white-space: nowrap; }
   .tablewrap {
     background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
   }
   .itemname { display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 15px; white-space: nowrap; }
   .item-text.clickable { cursor: pointer; }
@@ -217,7 +218,6 @@
     .row { flex-wrap: wrap; }
     .row input[type=text] { flex: 1 1 100%; min-width: 0; }
     .row button.reset { flex: 1 1 auto; min-width: 0; padding: 11px 14px; }
-    .tablewrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     thead th { position: static; }
   }
 </style>

@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SleepingForest Chest — Pending Requests</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="shortcut icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="favicon.png">
+<style>
+  :root {
+    --bg: #0d0f14; --surface: #161922; --border: #2a2e3a;
+    --text: #e8e9ed; --text-secondary: #9a9ea8; --text-muted: #6b6f7a;
+    --accent: #7c8cf8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    margin: 0; padding: 3rem 4vw;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  .topbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 32px; }
+  h1 { font-size: 28px; font-weight: 600; margin: 0 0 6px; }
+  .sub { color: var(--text-secondary); font-size: 15px; margin: 0; }
+  .back-link { color: var(--text-muted); font-size: 13px; text-decoration: underline; }
+  .back-link:hover { color: var(--text); }
+
+  .authbox { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .authbox img { width: 32px; height: 32px; border-radius: 50%; }
+  .authbox .uname { font-size: 14px; color: var(--text); }
+  .btn-discord {
+    background: #5865F2; border: none; color: #fff; padding: 10px 18px;
+    border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .btn-discord:hover { background: #4752c4; }
+  .link-muted { color: var(--text-muted); font-size: 13px; cursor: pointer; text-decoration: underline; background: none; border: none; }
+
+  .state-message {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 40px; text-align: center; color: var(--text-secondary); font-size: 15px;
+  }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 20px 22px; margin-bottom: 14px; display: flex; gap: 18px; align-items: flex-start;
+  }
+  .card-icon {
+    width: 48px; height: 48px; border-radius: 8px; border: 1px solid var(--border);
+    object-fit: contain; background: var(--bg); padding: 4px; flex-shrink: 0;
+  }
+  .card-body { flex: 1; min-width: 0; }
+  .card-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .card-title { font-weight: 600; font-size: 16px; }
+  .card-kind {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    padding: 3px 9px; border-radius: 6px; flex-shrink: 0;
+  }
+  .card-kind.borrow { background: rgba(124,140,248,.15); color: var(--accent); }
+  .card-kind.return { background: rgba(74,222,128,.15); color: #4ade80; }
+  .card-line { color: var(--text-secondary); font-size: 14px; margin-top: 6px; }
+  .card-time { color: var(--text-muted); font-size: 12px; margin-top: 4px; }
+  .card-affixes { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+  .card-affix {
+    font-size: 11px; background: var(--bg); padding: 3px 8px; border-radius: 6px;
+    color: var(--text-secondary);
+  }
+  .card-actions { display: flex; gap: 8px; margin-top: 14px; }
+  .btn {
+    padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
+    cursor: pointer; border: 1px solid transparent;
+  }
+  .btn-approve { background: rgba(74,222,128,.15); border-color: #4ade80; color: #4ade80; }
+  .btn-approve:hover { background: rgba(74,222,128,.28); }
+  .btn-deny { background: rgba(248,113,113,.12); border-color: #f87171; color: #f87171; }
+  .btn-deny:hover { background: rgba(248,113,113,.25); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  .toast {
+    position: fixed; bottom: 24px; right: 24px; max-width: 340px; background: var(--surface);
+    border: 1px solid var(--border); border-left: 3px solid var(--accent); color: var(--text);
+    padding: 14px 18px; border-radius: 10px; font-size: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.5);
+    z-index: 2000; opacity: 0; transform: translateY(12px); pointer-events: none; cursor: pointer;
+    transition: opacity .25s ease, transform .25s ease;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+  .toast.error { border-left-color: #f87171; }
+
+  @media (max-width: 600px) {
+    body { padding: 1.5rem 1rem; }
+    .topbar { flex-direction: column; }
+    .card { flex-direction: column; }
+    .toast { left: 16px; right: 16px; bottom: 16px; max-width: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div>
+      <h1>Pending Requests</h1>
+      <p class="sub">Approve or deny borrow/return requests directly - useful if a Discord DM went missing.</p>
+      <p class="sub"><a class="back-link" href="index.html">&larr; Back to the chest</a></p>
+    </div>
+    <div class="authbox" id="authBox"></div>
+  </div>
+
+  <div id="content">
+    <div class="state-message" id="loadingMsg">Loading...</div>
+  </div>
+</div>
+
+<div class="toast" id="toastEl" role="alert" aria-live="assertive"></div>
+
+<script>
+const API_BASE = "https://sleepingforest-bot.onrender.com";
+const RARITY_COLORS = {
+  Common: "#d1d5db", Uncommon: "#4ade80", Rare: "#60a5fa", Epic: "#c084fc",
+  Legendary: "#fb923c", Mythic: "#f472b6"
+};
+const PLACEHOLDER_ICON = "data:image/svg+xml;utf8," + encodeURIComponent(
+  "<svg xmlns='http://www.w3.org/2000/svg' width='60' height='60'><rect width='60' height='60' rx='8' fill='#161922'/><path d='M20 40 L30 20 L40 40 Z' fill='#2a2e3a'/></svg>"
+);
+
+const toastEl = document.getElementById('toastEl');
+let toastTimeout = null;
+function showToast(message, isError = false) {
+  clearTimeout(toastTimeout);
+  toastEl.textContent = message;
+  toastEl.classList.toggle('error', isError);
+  toastEl.classList.add('show');
+  toastTimeout = setTimeout(() => { toastEl.classList.remove('show'); }, 6000);
+}
+toastEl.addEventListener('click', () => {
+  clearTimeout(toastTimeout);
+  toastEl.classList.remove('show');
+});
+
+let currentUser = null;
+
+async function loadUser() {
+  const token = localStorage.getItem('sf_token');
+  if (!token) { currentUser = null; return; }
+  try {
+    const r = await fetch(`${API_BASE}/api/me`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) throw new Error();
+    currentUser = await r.json();
+  } catch {
+    currentUser = null;
+  }
+}
+
+function renderAuthBox() {
+  const box = document.getElementById('authBox');
+  if (currentUser) {
+    const avatarUrl = currentUser.avatar
+      ? `https://cdn.discordapp.com/avatars/${currentUser.id}/${currentUser.avatar}.png?size=64`
+      : 'https://cdn.discordapp.com/embed/avatars/0.png';
+    const displayName = currentUser.ingame_name || currentUser.username;
+    box.innerHTML = `<img src="${avatarUrl}" alt=""><span class="uname">${displayName}</span><button class="link-muted" id="logoutBtn">Log out</button>`;
+    document.getElementById('logoutBtn').onclick = () => {
+      localStorage.removeItem('sf_token');
+      window.location.reload();
+    };
+  } else {
+    box.innerHTML = `<button class="btn-discord" id="loginBtn">Log in with Discord</button>`;
+    document.getElementById('loginBtn').onclick = () => {
+      window.location.href = `${API_BASE}/auth/discord/login`;
+    };
+  }
+}
+
+function timeAgo(iso) {
+  if (!iso) return '';
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+async function loadPending() {
+  const content = document.getElementById('content');
+  const token = localStorage.getItem('sf_token');
+  try {
+    const r = await fetch(`${API_BASE}/api/pending`, { headers: { Authorization: `Bearer ${token}` } });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Something went wrong.');
+    renderPending(data.pending);
+  } catch (err) {
+    content.innerHTML = `<div class="state-message">${err.message}</div>`;
+  }
+}
+
+function renderPending(pending) {
+  const content = document.getElementById('content');
+  if (!pending.length) {
+    content.innerHTML = `<div class="state-message">Nothing pending right now.</div>`;
+    return;
+  }
+  content.innerHTML = '';
+  pending.forEach(p => {
+    const rarityColor = RARITY_COLORS[p.item_rarity] || '#9a9ea8';
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <img class="card-icon" src="${PLACEHOLDER_ICON}" alt="">
+      <div class="card-body">
+        <div class="card-top">
+          <span class="card-title" style="color:${rarityColor}">${p.item_name}</span>
+          <span class="card-kind ${p.type}">${p.type === 'borrow' ? 'Borrow' : 'Return'}</span>
+        </div>
+        <div class="card-line">${p.requester_name} &rarr; owner ${p.owner_name || '?'}</div>
+        <div class="card-time">Requested ${timeAgo(p.created_at)}</div>
+        <div class="card-affixes">${(p.item_affixes || []).map(a => `<span class="card-affix">${a}</span>`).join('')}</div>
+        <div class="card-actions">
+          <button class="btn btn-approve" data-id="${p.id}" data-approved="true">Approve</button>
+          <button class="btn btn-deny" data-id="${p.id}" data-approved="false">Deny</button>
+        </div>
+      </div>
+    `;
+    content.appendChild(card);
+  });
+
+  content.querySelectorAll('.btn[data-id]').forEach(btn => {
+    btn.addEventListener('click', () => resolveRequest(btn));
+  });
+}
+
+async function resolveRequest(btn) {
+  const id = btn.dataset.id;
+  const approved = btn.dataset.approved === 'true';
+  const card = btn.closest('.card');
+  const actionButtons = card.querySelectorAll('.btn');
+  actionButtons.forEach(b => b.disabled = true);
+  btn.textContent = approved ? 'Approving...' : 'Denying...';
+
+  try {
+    const token = localStorage.getItem('sf_token');
+    const r = await fetch(`${API_BASE}/api/pending/${id}/resolve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ approved }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Something went wrong.');
+    showToast(approved ? 'Request approved.' : 'Request denied.');
+    card.remove();
+    if (!document.querySelector('.card')) {
+      document.getElementById('content').innerHTML = `<div class="state-message">Nothing pending right now.</div>`;
+    }
+  } catch (err) {
+    showToast(err.message, true);
+    actionButtons.forEach(b => b.disabled = false);
+    btn.textContent = approved ? 'Approve' : 'Deny';
+  }
+}
+
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) window.location.reload();
+});
+
+(async function init() {
+  await loadUser();
+  renderAuthBox();
+  const content = document.getElementById('content');
+  if (!currentUser) {
+    content.innerHTML = `<div class="state-message">Log in with Discord to view pending requests.</div>`;
+    return;
+  }
+  if (!currentUser.officer) {
+    content.innerHTML = `<div class="state-message">Officers only.</div>`;
+    return;
+  }
+  await loadPending();
+})();
+</script>
+</body>
+</html>

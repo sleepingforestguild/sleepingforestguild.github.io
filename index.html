@@ -1555,6 +1555,14 @@ topBtn.addEventListener('click', () => {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
+// A backgrounded tab can be restored from bfcache instantly - a frozen snapshot of this
+// exact page from whenever it was last actually loaded, with zero new network requests.
+// That's what makes an old cached version reappear on tab wake. event.persisted is the
+// browser's own signal that this happened, so force a real reload to get current data.
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) window.location.reload();
+});
+
 (async function init() {
   handleAuthRedirect();
   await loadUser();

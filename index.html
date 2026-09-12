@@ -1361,7 +1361,7 @@ async function handlePastedStats(text) {
       const row = document.createElement('div');
       row.className = 'pc-row';
       const val = p.value ? '+' + p.value.replace(/^\+/, '') : '';
-      row.innerHTML = `<span>${p.name}</span><span>${val}</span>`;
+      row.innerHTML = `<span>${escapeHtml(p.name)}</span><span>${escapeHtml(val)}</span>`;
       effEl.appendChild(row);
     });
     effSection.style.display = 'block';
@@ -1378,7 +1378,7 @@ async function handlePastedStats(text) {
       row.className = 'pc-row';
       const raw = parsed.affixValues[name];
       const val = raw ? '+' + raw.replace(/^\+/, '') : '';
-      row.innerHTML = `<span>${name}</span><span>${val}</span>`;
+      row.innerHTML = `<span>${escapeHtml(name)}</span><span>${escapeHtml(val)}</span>`;
       affEl.appendChild(row);
     });
     affSection.style.display = 'block';

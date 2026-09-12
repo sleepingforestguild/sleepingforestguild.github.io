@@ -77,6 +77,7 @@
   }
   .status { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-secondary); white-space: nowrap; position: relative; }
   .status[data-tooltip] { cursor: pointer; }
+  .status.clickable { cursor: pointer; }
   .tooltip-fixed {
     position: fixed; display: none; background: #000; color: #fff; padding: 6px 10px;
     border-radius: 6px; font-size: 12px; white-space: nowrap; z-index: 1000;
@@ -293,6 +294,10 @@
 <div class="delete-confirm" id="deleteConfirmEl">
   <span>Remove this item?</span>
   <button class="rowbtn danger" id="deleteConfirmBtn">Delete</button>
+</div>
+<div class="delete-confirm" id="actionConfirmEl">
+  <span id="actionConfirmText"></span>
+  <button class="rowbtn" id="actionConfirmBtn"></button>
 </div>
 <button id="topBtn" class="back-to-top">&uarr;</button>
 
@@ -1325,6 +1330,87 @@ document.getElementById('deleteConfirmBtn').addEventListener('click', async (e) 
   });
 });
 
+const actionConfirmEl = document.getElementById('actionConfirmEl');
+const actionConfirmText = document.getElementById('actionConfirmText');
+const actionConfirmBtn = document.getElementById('actionConfirmBtn');
+let actionConfirmItemId = null;
+let actionConfirmFn = null;
+let actionInProgress = false;
+
+function showActionConfirm(triggerEl, itemId, text, btnLabel, onConfirm) {
+  actionConfirmItemId = itemId;
+  actionConfirmFn = onConfirm;
+  actionConfirmText.textContent = text;
+  actionConfirmBtn.textContent = btnLabel;
+  actionConfirmEl.style.display = 'flex';
+  const rect = triggerEl.getBoundingClientRect();
+  const margin = 6;
+  const w = actionConfirmEl.offsetWidth;
+  let left = rect.left;
+  let top = rect.bottom + margin;
+  if (left + w > window.innerWidth - margin) left = window.innerWidth - w - margin;
+  if (left < margin) left = margin;
+  actionConfirmEl.style.left = `${left}px`;
+  actionConfirmEl.style.top = `${top}px`;
+}
+function hideActionConfirm() {
+  actionConfirmEl.style.display = 'none';
+  actionConfirmItemId = null;
+  actionConfirmFn = null;
+}
+actionConfirmBtn.addEventListener('click', async (e) => {
+  e.stopPropagation();
+  const fn = actionConfirmFn;
+  if (!fn) return;
+  const btn = e.currentTarget;
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  actionInProgress = true;
+  try {
+    await fn();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+    actionInProgress = false;
+    hideActionConfirm();
+  }
+});
+
+async function requestBorrow(itemId) {
+  await enqueueMutation(async () => {
+    try {
+      const token = localStorage.getItem('sf_token');
+      const r = await fetch(`${API_BASE}/api/items/${itemId}/request-borrow`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Something went wrong.');
+      alert('Request sent! The owner needs to approve it via Discord DM.');
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+}
+
+async function requestReturn(itemId) {
+  await enqueueMutation(async () => {
+    try {
+      const token = localStorage.getItem('sf_token');
+      const r = await fetch(`${API_BASE}/api/items/${itemId}/request-return`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Something went wrong.');
+      alert('Return request sent! The owner needs to confirm via Discord DM.');
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+}
+
 function render() {
   const q = document.getElementById('search').value.toLowerCase();
   const filtered = items.filter(i =>
@@ -1351,17 +1437,23 @@ function render() {
     : `Showing ${filtered.length} of ${items.length} items`;
   hideTooltip();
   hideDeleteConfirm();
+  hideActionConfirm();
   const canManage = currentUser && currentUser.linked;
   filtered.forEach(i => {
     const rarityColor = RARITY_COLORS[i.rarity] || '#9a9ea8';
     const isNew = isItemNew(i);
     const statusColor = i.status === 'available' ? '#4ade80' : '#f87171';
     const statusLabel = i.status ? i.status.charAt(0).toUpperCase() + i.status.slice(1) : 'Unknown';
+    const isMine = canManage && i.owner_id === currentUser.id;
+    const isBorrower = canManage && i.borrower_id === currentUser.id;
     let statusTitle = '';
-    if (i.status === 'rented' && i.borrower_name) {
+    if (i.status === 'rented' && i.borrower_name && !isBorrower) {
       const d = i.borrowed_at ? new Date(i.borrowed_at).toLocaleDateString() : '';
       statusTitle = `Rented to ${i.borrower_name}${d ? ' on ' + d : ''}`;
     }
+    const canRequestBorrow = canManage && i.status === 'available' && !isMine;
+    const canRequestReturn = canManage && i.status === 'rented' && isBorrower;
+    const statusClickable = statusTitle || canRequestBorrow || canRequestReturn;
     const canRemoveThis = canManage && (i.owner_id === currentUser.id || currentUser.officer);
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -1375,16 +1467,31 @@ function render() {
       <td class="muted">${abbreviateClasses(i.classes)}</td>
       <td class="muted">${i.owner_name || ''}</td>
       <td><div class="affixlist">${(i.affixes || []).map(a => `<span class="affix">${a}</span>`).join('')}</div></td>
-      <td><span class="status" ${statusTitle ? `data-tooltip="${statusTitle}"` : ''}><span class="dot" style="background:${statusColor}"></span>${statusLabel}</span></td>
+      <td><span class="status${statusClickable ? ' clickable' : ''}" ${statusTitle ? `data-tooltip="${statusTitle}"` : ''}><span class="dot" style="background:${statusColor}"></span>${statusLabel}</span></td>
     `;
+    const statusEl = tr.querySelector('.status');
     if (statusTitle) {
-      const statusEl = tr.querySelector('.status');
       statusEl.addEventListener('click', (e) => {
         e.stopPropagation();
         const isOpen = tooltipEl.style.display === 'block' && tooltipEl.dataset.owner === i.id;
         if (isOpen) { hideTooltip(); return; }
         tooltipEl.dataset.owner = i.id;
         showTooltip(statusEl, statusTitle);
+      });
+    } else if (canRequestBorrow) {
+      statusEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (actionInProgress) return;
+        if (actionConfirmItemId === i.id) { hideActionConfirm(); return; }
+        showActionConfirm(statusEl, i.id, 'Request to borrow?', 'Request', () => requestBorrow(i.id));
+      });
+    } else if (canRequestReturn) {
+      statusEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (actionInProgress) return;
+        if (actionConfirmItemId === i.id) { hideActionConfirm(); return; }
+        const d = i.borrowed_at ? new Date(i.borrowed_at).toLocaleDateString() : '';
+        showActionConfirm(statusEl, i.id, `Rented by you${d ? ' on ' + d : ''}. Return?`, 'Return', () => requestReturn(i.id));
       });
     }
     if (canRemoveThis) {
@@ -1402,13 +1509,14 @@ function render() {
   });
 }
 
-document.querySelector('.tablewrap').addEventListener('scroll', () => { hideTooltip(); hideDeleteConfirm(); });
-window.addEventListener('scroll', () => { hideTooltip(); hideDeleteConfirm(); }, true);
-window.addEventListener('resize', () => { hideTooltip(); hideDeleteConfirm(); });
+document.querySelector('.tablewrap').addEventListener('scroll', () => { hideTooltip(); hideDeleteConfirm(); hideActionConfirm(); });
+window.addEventListener('scroll', () => { hideTooltip(); hideDeleteConfirm(); hideActionConfirm(); }, true);
+window.addEventListener('resize', () => { hideTooltip(); hideDeleteConfirm(); hideActionConfirm(); });
 
 document.addEventListener('click', () => {
   hideTooltip();
   hideDeleteConfirm();
+  hideActionConfirm();
 });
 
 const topBtn = document.getElementById('topBtn');

@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SleepingForest Community Chest</title>
-<link rel="icon" type="image/png" href="favicon.png">
-<link rel="shortcut icon" type="image/png" href="favicon.png">
-<link rel="apple-touch-icon" href="favicon.png">
+<link rel="icon" type="image/png" href="favicon.png?v=2">
+<link rel="shortcut icon" type="image/png" href="favicon.png?v=2">
+<link rel="apple-touch-icon" href="favicon.png?v=2">
 <style>
   :root {
     --bg: #0d0f14; --surface: #161922; --border: #2a2e3a;
@@ -35,6 +35,13 @@
   }
   button.reset:hover { border-color: var(--accent); }
   button.reset.active { background: rgba(124,140,248,.15); border-color: var(--accent); color: var(--accent); }
+  #resetBtn { position: relative; }
+  .filter-badge {
+    position: absolute; top: -22px; right: 0; white-space: nowrap;
+    background: var(--accent); color: #0d0f14; font-size: 11px; font-weight: 700;
+    padding: 3px 9px; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,.4);
+    pointer-events: none;
+  }
   .label { font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; margin: 0 0 10px; }
   .pillrow { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
   .pill {
@@ -69,6 +76,9 @@
   }
   thead th:first-child { border-top-left-radius: 13px; }
   thead th:last-child { border-top-right-radius: 13px; }
+  thead th.sortable { cursor: pointer; user-select: none; }
+  thead th.sortable:hover { color: var(--text); }
+  .sort-arrow { display: inline-block; width: 10px; margin-left: 3px; font-size: 10px; opacity: .7; }
   tbody td { padding: 14px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; white-space: nowrap; }
   .tablewrap {
     background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
@@ -122,6 +132,11 @@
   .empty, .loading { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 15px; }
 
   .topbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+  .title-row { display: flex; align-items: center; gap: 14px; }
+  .header-icon {
+    width: 48px; height: 48px; border-radius: 50%; flex-shrink: 0;
+    box-shadow: 0 0 12px rgba(124, 140, 248, 0.3);
+  }
   .authbox { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
   .authbox img { width: 32px; height: 32px; border-radius: 50%; }
   .authbox .uname { font-size: 14px; color: var(--text); }
@@ -257,9 +272,12 @@
 <body>
 <div class="wrap">
   <div class="topbar">
-    <div>
-      <h1>SleepingForest Community Chest</h1>
-      <p class="sub">Browse donated gear, or log in with Discord to add items right here. Borrow/return still happens in Discord.</p>
+    <div class="title-row">
+      <img src="chest-icon.png" alt="" class="header-icon" loading="lazy">
+      <div>
+        <h1>SleepingForest Community Chest</h1>
+        <p class="sub">Browse donated gear, or log in with Discord to add items right here. Borrow/return still happens in Discord.</p>
+      </div>
     </div>
     <div class="authbox" id="authBox"></div>
   </div>
@@ -271,7 +289,7 @@
     <button class="reset" id="rentedOnlyBtn" style="display:none;">Rented Only</button>
     <button class="reset" id="mineBtn" style="display:none;">My Items</button>
     <button class="reset" id="addBtn" style="display:none;">+ Add Item</button>
-    <button class="reset" id="resetBtn">Reset</button>
+    <button class="reset" id="resetBtn">Reset<span class="filter-badge" id="activeFilterBadge" style="display:none;"></span></button>
   </div>
 
   <p class="label">Type</p>
@@ -307,12 +325,12 @@
     <table>
       <thead>
         <tr>
-          <th style="width:16%">Item</th>
-          <th style="width:9%">Category</th>
-          <th style="width:9%">Class</th>
-          <th style="width:9%">Added by</th>
+          <th style="width:16%" class="sortable" data-sort="name">Item<span class="sort-arrow"></span></th>
+          <th style="width:9%" class="sortable" data-sort="category">Category<span class="sort-arrow"></span></th>
+          <th style="width:9%" class="sortable" data-sort="class">Class<span class="sort-arrow"></span></th>
+          <th style="width:9%" class="sortable" data-sort="owner">Added by<span class="sort-arrow"></span></th>
           <th style="width:47%">Affixes</th>
-          <th style="width:10%">Status</th>
+          <th style="width:10%" class="sortable" data-sort="status">Status<span class="sort-arrow"></span></th>
         </tr>
       </thead>
       <tbody id="rows"></tbody>
@@ -505,6 +523,9 @@ const selAffixes = new Set();
 const PAGE_SIZE = 100;
 let currentPage = 1;
 
+// null = default sort (new/available/level/rarity). Set once a column header is clicked.
+let columnSort = null;
+
 // Filter state survives an accidental refresh - saved on every render() call (i.e. every
 // filter change), restored once at load before the first render so pills/search/page all
 // come back exactly as they were left.
@@ -515,7 +536,7 @@ function saveFilterState() {
       selType, selClass, selToolCat, selLevel,
       selAffixes: [...selAffixes],
       search: document.getElementById('search').value,
-      mineOnly, rentedOnly,
+      mineOnly, rentedOnly, columnSort,
     }));
   } catch {}
 }
@@ -532,6 +553,7 @@ function loadFilterState() {
     if (s.search) document.getElementById('search').value = s.search;
     mineOnly = !!s.mineOnly;
     rentedOnly = mineOnly && !!s.rentedOnly;
+    columnSort = s.columnSort ?? null;
   } catch {}
 }
 loadFilterState();
@@ -721,7 +743,7 @@ function buildAffixes() {
 
 document.getElementById('resetBtn').onclick = () => {
   selType = null; selClass = null; selToolCat = null; selLevel = null; selAffixes.clear();
-  mineOnly = false; rentedOnly = false;
+  mineOnly = false; rentedOnly = false; columnSort = null;
   document.getElementById('mineBtn').classList.remove('active');
   document.getElementById('rentedOnlyBtn').classList.remove('active');
   document.getElementById('rentedOnlyBtn').style.display = 'none';
@@ -732,6 +754,60 @@ document.getElementById('resetBtn').onclick = () => {
 };
 document.getElementById('emptyResetBtn').onclick = () => document.getElementById('resetBtn').click();
 document.getElementById('search').addEventListener('input', debouncedSearchRender);
+
+// Column sorting: click a sortable header to sort by it ascending, click again for
+// descending, click a different header to switch columns (always starts ascending).
+function columnSortValue(item, key) {
+  switch (key) {
+    case 'name': return item.name || '';
+    case 'category': return item.category || '';
+    case 'class': return abbreviateClasses(item.classes) || '';
+    case 'owner': return item.owner_name || '';
+    case 'status': return item.status || '';
+    default: return '';
+  }
+}
+document.querySelectorAll('thead th.sortable').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.sort;
+    if (columnSort && columnSort.key === key) {
+      columnSort.dir = columnSort.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+      columnSort = { key, dir: 'asc' };
+    }
+    currentPage = 1;
+    render();
+  });
+});
+function updateSortArrows() {
+  document.querySelectorAll('thead th.sortable').forEach(th => {
+    const arrow = th.querySelector('.sort-arrow');
+    if (columnSort && columnSort.key === th.dataset.sort) {
+      arrow.textContent = columnSort.dir === 'asc' ? '\u25B2' : '\u25BC';
+    } else {
+      arrow.textContent = '';
+    }
+  });
+}
+
+function updateActiveFilterBadge() {
+  let count = 0;
+  if (document.getElementById('search').value.trim()) count++;
+  if (selType) count++;
+  if (selClass) count++;
+  if (selToolCat) count++;
+  if (selLevel !== null) count++;
+  count += selAffixes.size;
+  if (mineOnly) count++;
+  if (rentedOnly) count++;
+  const badge = document.getElementById('activeFilterBadge');
+  if (count > 0) {
+    badge.textContent = `${count} active filter${count === 1 ? '' : 's'}`;
+    badge.style.display = 'block';
+  } else {
+    badge.style.display = 'none';
+  }
+}
 
 function handleAuthRedirect() {
   const params = new URLSearchParams(window.location.search);
@@ -1599,6 +1675,12 @@ function render() {
     (!rentedOnly || i.status === 'rented') &&
     [...selAffixes].every(a => (i.affixes || []).includes(a))
   ).sort((a, b) => {
+    if (columnSort) {
+      const av = String(columnSortValue(a, columnSort.key)).toLowerCase();
+      const bv = String(columnSortValue(b, columnSort.key)).toLowerCase();
+      const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+      return columnSort.dir === 'asc' ? cmp : -cmp;
+    }
     const aNew = isItemNew(a), bNew = isItemNew(b);
     if (aNew !== bNew) return aNew ? -1 : 1;
     const aRented = a.status === 'rented', bRented = b.status === 'rented';
@@ -1622,6 +1704,8 @@ function render() {
     (filtered.length === items.length && totalPages === 1)
       ? `${items.length} item${items.length === 1 ? '' : 's'} in the chest`
       : `Showing ${rangeStart}-${rangeEnd} of ${filtered.length} items`;
+  updateSortArrows();
+  updateActiveFilterBadge();
   renderPagination(totalPages);
   hideTooltip();
   hideDeleteConfirm();

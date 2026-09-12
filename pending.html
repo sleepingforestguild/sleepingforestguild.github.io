@@ -60,6 +60,8 @@
   .card-kind.return { background: rgba(74,222,128,.15); color: #4ade80; }
   .card-line { color: var(--text-secondary); font-size: 14px; margin-top: 6px; }
   .card-time { color: var(--text-muted); font-size: 12px; margin-top: 4px; }
+  .card-time.stale-warning { color: #fb923c; }
+  .card-time.stale-critical { color: #f87171; font-weight: 700; }
   .card-affixes { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
   .card-affix {
     font-size: 11px; background: var(--bg); padding: 3px 8px; border-radius: 6px;
@@ -170,29 +172,66 @@ function renderAuthBox() {
   }
 }
 
-function timeAgo(iso) {
-  if (!iso) return '';
+function timeAgoInfo(iso) {
+  if (!iso) return { text: '', className: '' };
   const diffMs = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diffMs / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+  const days = Math.floor(hours / 24);
+  let text;
+  if (mins < 1) text = 'just now';
+  else if (mins < 60) text = `${mins}m ago`;
+  else if (hours < 24) text = `${hours}h ago`;
+  else text = `${days}d ago`;
+  let className = '';
+  if (days >= 7) className = 'stale-critical';
+  else if (hours >= 48) className = 'stale-warning';
+  return { text: `Requested ${text}`, className };
 }
 
-async function loadPending() {
+// Polling architecture: fetch silently in the background, compare against the last known
+// list, and only touch the DOM if something actually changed. Without this, a plain
+// setInterval + full rebuild would flash the whole list every cycle and yank the Approve
+// button out from under a moderator mid-click.
+let currentPending = [];
+let lastPendingJSON = null;
+let pollTimer = null;
+
+async function pollPending(isFirstLoad) {
   const content = document.getElementById('content');
   const token = localStorage.getItem('sf_token');
   try {
     const r = await fetch(`${API_BASE}/api/pending`, { headers: { Authorization: `Bearer ${token}` } });
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || 'Something went wrong.');
-    renderPending(data.pending);
+    const json = JSON.stringify(data.pending);
+    if (json === lastPendingJSON) return; // nothing changed - skip the rebuild entirely
+    lastPendingJSON = json;
+    currentPending = data.pending;
+    renderPending(currentPending);
   } catch (err) {
-    content.innerHTML = `<div class="state-message">${err.message}</div>`;
+    // A background poll failing shouldn't nuke a working view over a transient blip -
+    // only show the error state if this was the very first load.
+    if (isFirstLoad) content.innerHTML = `<div class="state-message">${err.message}</div>`;
   }
 }
+
+function startPolling() {
+  stopPolling();
+  pollTimer = setInterval(() => pollPending(false), 10000);
+}
+function stopPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = null;
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    stopPolling();
+  } else {
+    pollPending(false);
+    startPolling();
+  }
+});
 
 function renderPending(pending) {
   const content = document.getElementById('content');
@@ -203,17 +242,18 @@ function renderPending(pending) {
   content.innerHTML = '';
   pending.forEach(p => {
     const rarityColor = RARITY_COLORS[p.item_rarity] || '#9a9ea8';
+    const timeInfo = timeAgoInfo(p.created_at);
     const card = document.createElement('div');
     card.className = 'card';
     card.innerHTML = `
-      <img class="card-icon" src="${PLACEHOLDER_ICON}" alt="">
+      <img class="card-icon" src="${p.item_icon_url || PLACEHOLDER_ICON}" alt="" onerror="this.onerror=null;this.src='${PLACEHOLDER_ICON}';">
       <div class="card-body">
         <div class="card-top">
           <span class="card-title" style="color:${rarityColor}">${p.item_name}</span>
           <span class="card-kind ${p.type}">${p.type === 'borrow' ? 'Borrow' : 'Return'}</span>
         </div>
         <div class="card-line">${p.requester_name} &rarr; owner ${p.owner_name || '?'}</div>
-        <div class="card-time">Requested ${timeAgo(p.created_at)}</div>
+        <div class="card-time ${timeInfo.className}">${timeInfo.text}</div>
         <div class="card-affixes">${(p.item_affixes || []).map(a => `<span class="card-affix">${a}</span>`).join('')}</div>
         <div class="card-actions">
           <button class="btn btn-approve" data-id="${p.id}" data-approved="true">Approve</button>
@@ -247,6 +287,8 @@ async function resolveRequest(btn) {
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || 'Something went wrong.');
     showToast(approved ? 'Request approved.' : 'Request denied.');
+    currentPending = currentPending.filter(p => p.id !== id);
+    lastPendingJSON = JSON.stringify(currentPending);
     card.remove();
     if (!document.querySelector('.card')) {
       document.getElementById('content').innerHTML = `<div class="state-message">Nothing pending right now.</div>`;
@@ -274,7 +316,8 @@ window.addEventListener('pageshow', (event) => {
     content.innerHTML = `<div class="state-message">Officers only.</div>`;
     return;
   }
-  await loadPending();
+  await pollPending(true);
+  startPolling();
 })();
 </script>
 </body>

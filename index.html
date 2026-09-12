@@ -88,6 +88,19 @@
     border: 1px solid var(--border); padding: 8px 10px 8px 14px; border-radius: 10px;
     font-size: 13px; color: var(--text-secondary); z-index: 1000; box-shadow: 0 4px 16px rgba(0,0,0,.5);
   }
+  .delete-confirm span { white-space: nowrap; }
+  .toast {
+    position: fixed; bottom: 24px; right: 24px; max-width: 340px; background: var(--surface);
+    border: 1px solid var(--border); border-left: 3px solid var(--accent); color: var(--text);
+    padding: 14px 18px; border-radius: 10px; font-size: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.5);
+    z-index: 2000; opacity: 0; transform: translateY(12px); pointer-events: none;
+    transition: opacity .25s ease, transform .25s ease;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.error { border-left-color: #f87171; }
+  @media (max-width: 768px) {
+    .toast { bottom: auto; top: 16px; right: 16px; left: 16px; max-width: none; }
+  }
   .empty, .loading { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 15px; }
 
   .topbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
@@ -299,6 +312,7 @@
   <span id="actionConfirmText"></span>
   <button class="rowbtn" id="actionConfirmBtn"></button>
 </div>
+<div class="toast" id="toastEl"></div>
 <button id="topBtn" class="back-to-top">&uarr;</button>
 
 <div class="modalbg" id="addModalBg" style="display:none;">
@@ -1214,7 +1228,7 @@ document.getElementById('modalSubmit').onclick = async () => {
       items.push(data.item);
       render();
     } catch (e) {
-      alert(e.message);
+      showToast(e.message, true);
     } finally {
       addBtnEl.disabled = false;
     }
@@ -1321,7 +1335,7 @@ document.getElementById('deleteConfirmBtn').addEventListener('click', async (e) 
       hideDeleteConfirm();
       render();
     } catch (err) {
-      alert(err.message);
+      showToast(err.message, true);
     } finally {
       btn.disabled = false;
       btn.textContent = originalText;
@@ -1329,6 +1343,16 @@ document.getElementById('deleteConfirmBtn').addEventListener('click', async (e) 
     }
   });
 });
+
+const toastEl = document.getElementById('toastEl');
+let toastTimeout = null;
+function showToast(message, isError = false) {
+  clearTimeout(toastTimeout);
+  toastEl.textContent = message;
+  toastEl.classList.toggle('error', isError);
+  toastEl.classList.add('show');
+  toastTimeout = setTimeout(() => { toastEl.classList.remove('show'); }, 3000);
+}
 
 const actionConfirmEl = document.getElementById('actionConfirmEl');
 const actionConfirmText = document.getElementById('actionConfirmText');
@@ -1387,9 +1411,9 @@ async function requestBorrow(itemId) {
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || 'Something went wrong.');
-      alert('Request sent! The owner needs to approve it via Discord DM.');
+      showToast('Request sent! The owner will review it in Discord.');
     } catch (err) {
-      alert(err.message);
+      showToast(err.message, true);
     }
   });
 }
@@ -1404,9 +1428,9 @@ async function requestReturn(itemId) {
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || 'Something went wrong.');
-      alert('Return request sent! The owner needs to confirm via Discord DM.');
+      showToast('Return request sent! The owner will confirm it in Discord.');
     } catch (err) {
-      alert(err.message);
+      showToast(err.message, true);
     }
   });
 }

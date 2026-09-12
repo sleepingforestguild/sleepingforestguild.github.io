@@ -42,6 +42,15 @@
   .pill:hover { border-color: var(--accent); }
   .pill.active { background: rgba(124,140,248,.15); border-color: var(--accent); color: var(--accent); }
   .pill.small { font-size: 14px; padding: 6px 14px; }
+  .pagination { display: flex; align-items: center; gap: 8px; margin-top: 16px; flex-wrap: wrap; justify-content: flex-end; }
+  .pagination button {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text-secondary);
+    padding: 8px 14px; border-radius: 8px; font-size: 14px; cursor: pointer;
+  }
+  .pagination button:hover:not(:disabled) { border-color: var(--accent); color: var(--text); }
+  .pagination button.active { background: var(--accent); border-color: var(--accent); color: #0d0f14; font-weight: 600; }
+  .pagination button:disabled { opacity: .4; cursor: not-allowed; }
+  .pagination .ellipsis { color: var(--text-muted); padding: 0 4px; }
   table { width: 100%; border-collapse: collapse; font-size: 15px; table-layout: auto; }
   thead th {
     text-align: left; padding: 14px 16px; color: var(--text-muted);
@@ -251,6 +260,7 @@
   <div class="row">
     <input type="text" id="search" placeholder="Search items...">
     <button class="reset" id="mineBtn" style="display:none;">My Items</button>
+    <button class="reset" id="rentedOnlyBtn" style="display:none;">Rented Only</button>
     <button class="reset" id="addBtn" style="display:none;">+ Add Item</button>
     <button class="reset" id="resetBtn">Reset</button>
   </div>
@@ -301,6 +311,7 @@
     <div id="loading" class="loading">Loading chest...</div>
     <div id="empty" class="empty" style="display:none;">No items match those filters.</div>
   </div>
+  <div class="pagination" id="paginationEl" style="display:none;"></div>
 </div>
 
 <div class="tooltip-fixed" id="tooltipEl"></div>
@@ -313,14 +324,14 @@
   <button class="rowbtn" id="actionConfirmBtn"></button>
 </div>
 <div class="toast" id="toastEl" role="alert" aria-live="assertive"></div>
-<button id="topBtn" class="back-to-top">&uarr;</button>
+<button id="topBtn" class="back-to-top" aria-label="Back to top">&uarr;</button>
 
 <div class="modalbg" id="addModalBg" style="display:none;">
   <div class="modal" id="modalContainer">
     
     <!-- EITHER: Standard form UI -->
     <div id="defaultUiWrap">
-      <button class="modal-close" id="modalClose">&times;</button>
+      <button class="modal-close" id="modalClose" aria-label="Close">&times;</button>
       <h2>Add an item</h2>
 
       <div id="pasteWrap">
@@ -352,14 +363,14 @@
     <div id="previewCard">
       <div class="pc-top">
         <div class="pc-icon-wrap">
-          <img class="pc-icon" id="pcIcon" src="" alt="">
+          <img class="pc-icon" id="pcIcon" src="" alt="" loading="lazy">
           <span class="pc-lv" id="pcLv"></span>
         </div>
         <div class="pc-info">
           <div class="pc-name" id="pcName"></div>
           <div class="pc-sub" id="pcSubtitle"></div>
         </div>
-        <button class="pc-close" id="pcCloseBtn">&times;</button>
+        <button class="pc-close" id="pcCloseBtn" aria-label="Close">&times;</button>
       </div>
       
       <div class="pc-body">
@@ -472,8 +483,43 @@ function enqueueMutation(taskFn) {
 }
 let selType = null, selClass = null, selToolCat = null, selLevel = null;
 let mineOnly = false;
+let rentedOnly = false;
 let currentUser = null;
 const selAffixes = new Set();
+
+const PAGE_SIZE = 100;
+let currentPage = 1;
+
+// Filter state survives an accidental refresh - saved on every render() call (i.e. every
+// filter change), restored once at load before the first render so pills/search/page all
+// come back exactly as they were left.
+const FILTER_STATE_KEY = 'sf_filter_state';
+function saveFilterState() {
+  try {
+    localStorage.setItem(FILTER_STATE_KEY, JSON.stringify({
+      selType, selClass, selToolCat, selLevel,
+      selAffixes: [...selAffixes],
+      search: document.getElementById('search').value,
+      mineOnly, rentedOnly,
+    }));
+  } catch {}
+}
+function loadFilterState() {
+  try {
+    const raw = localStorage.getItem(FILTER_STATE_KEY);
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    selType = s.selType ?? null;
+    selClass = s.selClass ?? null;
+    selToolCat = s.selToolCat ?? null;
+    selLevel = s.selLevel ?? null;
+    (s.selAffixes || []).forEach(a => selAffixes.add(a));
+    if (s.search) document.getElementById('search').value = s.search;
+    mineOnly = !!s.mineOnly;
+    rentedOnly = !!s.rentedOnly;
+  } catch {}
+}
+loadFilterState();
 
 function itemMatchesFilters(i) {
   if (!selType) return true;
@@ -506,11 +552,18 @@ function resolvedCategory() {
 const typeEl = document.getElementById('types');
 TYPES.forEach(t => {
   const btn = document.createElement('button');
-  btn.className = 'pill';
+  btn.className = 'pill' + (selType === t ? ' active' : '');
   btn.textContent = t;
   btn.onclick = () => {
-    selType = selType === t ? null : t;
-    selClass = null; selToolCat = null; selLevel = null; selAffixes.clear();
+    const newType = selType === t ? null : t;
+    const prevNeedsClass = selType && TYPE_CONFIG[selType].needsClass;
+    const newNeedsClass = newType && TYPE_CONFIG[newType].needsClass;
+    selType = newType;
+    // Retain the Warrior/Ranger/Mage pick when switching between the 4 slots that all use
+    // it (Helmet/Bodyarmor/Gloves/Boots) - only clear it when leaving that group entirely.
+    if (!(prevNeedsClass && newNeedsClass)) selClass = null;
+    selToolCat = null; selLevel = null; selAffixes.clear();
+    currentPage = 1;
     [...typeEl.children].forEach(b => b.classList.remove('active'));
     if (selType) btn.classList.add('active');
     buildClassWrap(); buildToolCatWrap(); buildLevels(); buildAffixes(); render();
@@ -527,11 +580,12 @@ function buildClassWrap() {
   wrap.style.display = 'block';
   ARCHETYPE_LIST.forEach(c => {
     const btn = document.createElement('button');
-    btn.className = 'pill small';
+    btn.className = 'pill small' + (selClass === c ? ' active' : '');
     btn.textContent = c;
     btn.onclick = () => {
       selClass = selClass === c ? null : c;
       selLevel = null; selAffixes.clear();
+      currentPage = 1;
       [...classEl.children].forEach(b => b.classList.remove('active'));
       if (selClass) btn.classList.add('active');
       buildLevels(); buildAffixes(); render();
@@ -549,11 +603,12 @@ function buildToolCatWrap() {
   wrap.style.display = 'block';
   cfg.categories.forEach(cat => {
     const btn = document.createElement('button');
-    btn.className = 'pill small';
+    btn.className = 'pill small' + (selToolCat === cat ? ' active' : '');
     btn.textContent = cat;
     btn.onclick = () => {
       selToolCat = selToolCat === cat ? null : cat;
       selLevel = null; selAffixes.clear();
+      currentPage = 1;
       [...tcEl.children].forEach(b => b.classList.remove('active'));
       if (selToolCat) btn.classList.add('active');
       buildLevels(); buildAffixes(); render();
@@ -590,10 +645,11 @@ function buildLevels() {
   wrap.style.display = 'block';
   tiers.forEach(([lvl, label]) => {
     const btn = document.createElement('button');
-    btn.className = 'pill small';
+    btn.className = 'pill small' + (selLevel === lvl ? ' active' : '');
     btn.textContent = label;
     btn.onclick = () => {
       selLevel = selLevel === lvl ? null : lvl;
+      currentPage = 1;
       [...levelEl.children].forEach(b => b.classList.remove('active'));
       if (selLevel !== null) btn.classList.add('active');
       render();
@@ -613,11 +669,12 @@ function buildAffixes() {
   wrap.style.display = 'block';
   pool.forEach(a => {
     const btn = document.createElement('button');
-    btn.className = 'pill small';
+    btn.className = 'pill small' + (selAffixes.has(a) ? ' active' : '');
     btn.textContent = a;
     btn.onclick = () => {
       if (selAffixes.has(a)) { selAffixes.delete(a); btn.classList.remove('active'); }
       else if (selAffixes.size < 4) { selAffixes.add(a); btn.classList.add('active'); }
+      currentPage = 1;
       render();
     };
     affixEl.appendChild(btn);
@@ -627,13 +684,16 @@ function buildAffixes() {
 
 document.getElementById('resetBtn').onclick = () => {
   selType = null; selClass = null; selToolCat = null; selLevel = null; selAffixes.clear();
-  mineOnly = false;
+  mineOnly = false; rentedOnly = false;
   document.getElementById('mineBtn').classList.remove('active');
+  document.getElementById('rentedOnlyBtn').classList.remove('active');
+  document.getElementById('rentedOnlyBtn').style.display = 'none';
   document.getElementById('search').value = '';
+  currentPage = 1;
   [...typeEl.children].forEach(b => b.classList.remove('active'));
   buildClassWrap(); buildToolCatWrap(); buildLevels(); buildAffixes(); render();
 };
-document.getElementById('search').addEventListener('input', render);
+document.getElementById('search').addEventListener('input', () => { currentPage = 1; render(); });
 
 function handleAuthRedirect() {
   const params = new URLSearchParams(window.location.search);
@@ -672,6 +732,7 @@ async function loadUser() {
 function renderAuthBox() {
   const box = document.getElementById('authBox');
   const mineBtn = document.getElementById('mineBtn');
+  const rentedBtn = document.getElementById('rentedOnlyBtn');
   const addBtn = document.getElementById('addBtn');
   const removeHint = document.getElementById('removeHint');
   const linkHint = document.getElementById('linkHint');
@@ -680,11 +741,13 @@ function renderAuthBox() {
       ? `https://cdn.discordapp.com/avatars/${currentUser.id}/${currentUser.avatar}.png?size=64`
       : 'https://cdn.discordapp.com/embed/avatars/0.png';
     const displayName = currentUser.ingame_name || currentUser.username;
-    box.innerHTML = `<img src="${avatarUrl}" alt=""><span class="uname">${displayName}</span><button class="link-muted" id="logoutBtn">Log out</button>`;
+    box.innerHTML = `<img src="${avatarUrl}" alt="" loading="lazy"><span class="uname">${displayName}</span><button class="link-muted" id="logoutBtn">Log out</button>`;
     document.getElementById('logoutBtn').onclick = () => {
       localStorage.removeItem('sf_token');
-      currentUser = null; mineOnly = false;
+      currentUser = null; mineOnly = false; rentedOnly = false;
       mineBtn.classList.remove('active');
+      rentedBtn.classList.remove('active');
+      rentedBtn.style.display = 'none';
       renderAuthBox(); render();
     };
     if (currentUser.linked) {
@@ -692,10 +755,16 @@ function renderAuthBox() {
       addBtn.style.display = 'inline-block';
       removeHint.style.display = 'block';
       linkHint.style.display = 'none';
+      mineBtn.classList.toggle('active', mineOnly);
+      rentedBtn.style.display = mineOnly ? 'inline-block' : 'none';
+      rentedBtn.classList.toggle('active', rentedOnly);
     } else {
       mineBtn.style.display = 'none';
       mineOnly = false;
       mineBtn.classList.remove('active');
+      rentedOnly = false;
+      rentedBtn.style.display = 'none';
+      rentedBtn.classList.remove('active');
       addBtn.style.display = 'none';
       removeHint.style.display = 'none';
       linkHint.textContent = 'Run !link <ingame_name> in Discord to add or remove items.';
@@ -705,16 +774,28 @@ function renderAuthBox() {
     box.innerHTML = `<button class="btn-discord" id="loginBtn">Log in with Discord</button>`;
     document.getElementById('loginBtn').onclick = () => { window.location.href = `${API_BASE}/auth/discord/login`; };
     mineBtn.style.display = 'none';
+    rentedBtn.style.display = 'none';
     addBtn.style.display = 'none';
     removeHint.style.display = 'none';
     linkHint.style.display = 'none';
     mineOnly = false;
+    rentedOnly = false;
   }
 }
 
 document.getElementById('mineBtn').onclick = () => {
   mineOnly = !mineOnly;
   document.getElementById('mineBtn').classList.toggle('active', mineOnly);
+  const rentedBtn = document.getElementById('rentedOnlyBtn');
+  rentedBtn.style.display = mineOnly ? 'inline-block' : 'none';
+  if (!mineOnly) { rentedOnly = false; rentedBtn.classList.remove('active'); }
+  currentPage = 1;
+  render();
+};
+document.getElementById('rentedOnlyBtn').onclick = () => {
+  rentedOnly = !rentedOnly;
+  document.getElementById('rentedOnlyBtn').classList.toggle('active', rentedOnly);
+  currentPage = 1;
   render();
 };
 
@@ -883,6 +964,7 @@ document.getElementById('addBtn').onclick = async () => {
 
 async function openAddModal() {
   hideDeleteConfirm();
+  modalPreviouslyFocusedEl = document.activeElement;
   const master = await ensureItemMaster();
   modalItemMap = {};
   const list = document.getElementById('modalItemList');
@@ -1179,7 +1261,32 @@ document.getElementById('modalRarity').addEventListener('change', () => {
   ensureItemMaster().then(buildModalAffixes);
 });
 
-function closeAddModal() { document.getElementById('addModalBg').style.display = 'none'; }
+let modalPreviouslyFocusedEl = null;
+function getFocusableModalElements() {
+  const container = document.getElementById('modalContainer');
+  const all = container.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+  return [...all].filter(el => el.offsetParent !== null && !el.disabled);
+}
+function trapModalFocus(e) {
+  if (e.key !== 'Tab') return;
+  const focusable = getFocusableModalElements();
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    first.focus();
+  }
+}
+document.getElementById('addModalBg').addEventListener('keydown', trapModalFocus);
+
+function closeAddModal() {
+  document.getElementById('addModalBg').style.display = 'none';
+  if (modalPreviouslyFocusedEl) modalPreviouslyFocusedEl.focus();
+}
 document.getElementById('modalClose').onclick = closeAddModal;
 document.getElementById('pcCloseBtn').onclick = closeAddModal;
 document.getElementById('modalCancel').onclick = closeAddModal;
@@ -1226,6 +1333,7 @@ document.getElementById('modalSubmit').onclick = async () => {
       }
 
       items.push(data.item);
+      currentPage = 1;
       render();
     } catch (e) {
       showToast(e.message, true);
@@ -1440,12 +1548,14 @@ async function requestReturn(itemId) {
 }
 
 function render() {
+  saveFilterState();
   const q = document.getElementById('search').value.toLowerCase();
   const filtered = items.filter(i =>
     i.name.toLowerCase().includes(q) &&
     itemMatchesFilters(i) &&
     (selLevel === null || i.level === selLevel) &&
     (!mineOnly || !currentUser || i.owner_id === currentUser.id || i.borrower_id === currentUser.id) &&
+    (!rentedOnly || i.status === 'rented') &&
     [...selAffixes].every(a => (i.affixes || []).includes(a))
   ).sort((a, b) => {
     const aNew = isItemNew(a), bNew = isItemNew(b);
@@ -1457,17 +1567,26 @@ function render() {
     const aRarity = RARITY_ORDER.indexOf(a.rarity), bRarity = RARITY_ORDER.indexOf(b.rarity);
     return bRarity - aRarity;
   });
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  if (currentPage > totalPages) currentPage = totalPages;
+  if (currentPage < 1) currentPage = 1;
+  const pageStart = (currentPage - 1) * PAGE_SIZE;
+  const pageItems = filtered.slice(pageStart, pageStart + PAGE_SIZE);
   const rows = document.getElementById('rows');
   rows.innerHTML = '';
   document.getElementById('empty').style.display = filtered.length ? 'none' : 'block';
-  document.getElementById('itemCount').textContent = filtered.length === items.length
-    ? `${items.length} item${items.length === 1 ? '' : 's'} in the chest`
-    : `Showing ${filtered.length} of ${items.length} items`;
+  const rangeStart = filtered.length ? pageStart + 1 : 0;
+  const rangeEnd = Math.min(pageStart + PAGE_SIZE, filtered.length);
+  document.getElementById('itemCount').textContent =
+    (filtered.length === items.length && totalPages === 1)
+      ? `${items.length} item${items.length === 1 ? '' : 's'} in the chest`
+      : `Showing ${rangeStart}-${rangeEnd} of ${filtered.length} items`;
+  renderPagination(totalPages);
   hideTooltip();
   hideDeleteConfirm();
   hideActionConfirm();
   const canManage = currentUser && currentUser.linked;
-  filtered.forEach(i => {
+  pageItems.forEach(i => {
     const rarityColor = RARITY_COLORS[i.rarity] || '#9a9ea8';
     const isNew = isItemNew(i);
     const statusColor = i.status === 'available' ? '#4ade80' : '#f87171';
@@ -1537,6 +1656,58 @@ function render() {
   });
 }
 
+function getPageList(cur, total) {
+  const pages = [];
+  if (total <= 7) {
+    for (let i = 1; i <= total; i++) pages.push(i);
+    return pages;
+  }
+  pages.push(1);
+  if (cur > 3) pages.push('...');
+  const start = Math.max(2, cur - 1);
+  const end = Math.min(total - 1, cur + 1);
+  for (let i = start; i <= end; i++) pages.push(i);
+  if (cur < total - 2) pages.push('...');
+  pages.push(total);
+  return pages;
+}
+
+function renderPagination(totalPages) {
+  const el = document.getElementById('paginationEl');
+  if (totalPages <= 1) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = 'flex';
+  el.innerHTML = '';
+
+  const goTo = (p) => { currentPage = p; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+
+  const prevBtn = document.createElement('button');
+  prevBtn.textContent = '\u2039 Previous';
+  prevBtn.disabled = currentPage === 1;
+  prevBtn.onclick = () => goTo(currentPage - 1);
+  el.appendChild(prevBtn);
+
+  getPageList(currentPage, totalPages).forEach(p => {
+    if (p === '...') {
+      const span = document.createElement('span');
+      span.className = 'ellipsis';
+      span.textContent = '...';
+      el.appendChild(span);
+      return;
+    }
+    const btn = document.createElement('button');
+    btn.textContent = p;
+    if (p === currentPage) btn.classList.add('active');
+    btn.onclick = () => goTo(p);
+    el.appendChild(btn);
+  });
+
+  const nextBtn = document.createElement('button');
+  nextBtn.textContent = 'Next \u203a';
+  nextBtn.disabled = currentPage === totalPages;
+  nextBtn.onclick = () => goTo(currentPage + 1);
+  el.appendChild(nextBtn);
+}
+
 document.querySelector('.tablewrap').addEventListener('scroll', () => { hideTooltip(); hideDeleteConfirm(); hideActionConfirm(); });
 window.addEventListener('scroll', () => { hideTooltip(); hideDeleteConfirm(); hideActionConfirm(); }, true);
 window.addEventListener('resize', () => { hideTooltip(); hideDeleteConfirm(); hideActionConfirm(); });
@@ -1571,6 +1742,7 @@ window.addEventListener('pageshow', (event) => {
     if (!r.ok) throw new Error('Could not load the chest - try refreshing in a moment.');
     items = (await r.json()).items;
     document.getElementById('loading').style.display = 'none';
+    buildClassWrap(); buildToolCatWrap(); buildLevels(); buildAffixes();
     render();
   } catch (err) {
     document.getElementById('loading').textContent = err.message;

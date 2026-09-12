@@ -23,7 +23,7 @@
   }
   .wrap { max-width: 1600px; margin: 0 auto; }
   h1 { font-size: 32px; font-weight: 600; margin: 0 0 6px; }
-  .sub { color: var(--text-secondary); font-size: 15px; margin: 0 0 32px; }
+  .sub { color: var(--text-secondary); font-size: 15px; margin: 0; }
   .row { display: flex; gap: 10px; margin-bottom: 24px; }
   input[type=text] {
     flex: 1; background: var(--surface); border: 1px solid var(--border);
@@ -135,12 +135,11 @@
   }
   .empty, .loading { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 15px; }
 
-  .topbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+  .topbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 32px; }
   .title-row { display: flex; align-items: center; gap: 14px; }
   .header-icon {
     width: 48px; height: 48px; border-radius: 50%; flex-shrink: 0;
     box-shadow: 0 0 12px rgba(124, 140, 248, 0.3);
-    transform: translateY(-27.5px);
   }
   .authbox { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
   .authbox img { width: 32px; height: 32px; border-radius: 50%; }
@@ -279,7 +278,6 @@
     #rentedOnlyBtn { grid-area: rented; }
     .row button.reset { min-width: 0; padding: 11px 14px; width: 100%; }
     thead th { position: static; }
-    .header-icon { transform: translateY(-44.5px); }
 
     /* Mobile card layout: each row becomes a stacked card instead of a horizontally-
        scrolled table. Item+Status share a header line, Affixes gets its own full-width

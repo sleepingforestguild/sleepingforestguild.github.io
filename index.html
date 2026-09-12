@@ -267,7 +267,7 @@
       display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
       grid-template-areas: "search search" "mine add" "reset reset";
     }
-    .row.rented-active { grid-template-areas: "search search" "mine add" "reset rented"; }
+    .row.rented-active { grid-template-areas: "search search" "mine add" "rented reset"; }
     .row input[type=text] { grid-area: search; }
     #mineBtn { grid-area: mine; }
     #addBtn { grid-area: add; }
@@ -556,7 +556,9 @@ let rentedOnly = false;
 let currentUser = null;
 const selAffixes = new Set();
 
-const PAGE_SIZE = 100;
+function getPageSize() {
+  return window.innerWidth <= 768 ? 25 : 100;
+}
 let currentPage = 1;
 
 // null = default sort (new/available/level/rarity). Set once a column header is clicked.
@@ -806,10 +808,12 @@ function columnSortValue(item, key) {
 document.querySelectorAll('thead th.sortable').forEach(th => {
   th.addEventListener('click', () => {
     const key = th.dataset.sort;
-    if (columnSort && columnSort.key === key) {
-      columnSort.dir = columnSort.dir === 'asc' ? 'desc' : 'asc';
-    } else {
+    if (!columnSort || columnSort.key !== key) {
       columnSort = { key, dir: 'asc' };
+    } else if (columnSort.dir === 'asc') {
+      columnSort.dir = 'desc';
+    } else {
+      columnSort = null;
     }
     currentPage = 1;
     render();
@@ -1735,16 +1739,17 @@ function render() {
     const aRarity = RARITY_ORDER.indexOf(a.rarity), bRarity = RARITY_ORDER.indexOf(b.rarity);
     return bRarity - aRarity;
   });
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageSize = getPageSize();
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   if (currentPage > totalPages) currentPage = totalPages;
   if (currentPage < 1) currentPage = 1;
-  const pageStart = (currentPage - 1) * PAGE_SIZE;
-  const pageItems = filtered.slice(pageStart, pageStart + PAGE_SIZE);
+  const pageStart = (currentPage - 1) * pageSize;
+  const pageItems = filtered.slice(pageStart, pageStart + pageSize);
   const rows = document.getElementById('rows');
   rows.innerHTML = '';
   document.getElementById('empty').style.display = filtered.length ? 'none' : 'block';
   const rangeStart = filtered.length ? pageStart + 1 : 0;
-  const rangeEnd = Math.min(pageStart + PAGE_SIZE, filtered.length);
+  const rangeEnd = Math.min(pageStart + pageSize, filtered.length);
   document.getElementById('itemCount').textContent =
     (filtered.length === items.length && totalPages === 1)
       ? `${items.length} item${items.length === 1 ? '' : 's'} in the chest`
@@ -1894,7 +1899,20 @@ function renderPagination(totalPages) {
 
 document.querySelector('.tablewrap').addEventListener('scroll', () => { hideTooltip(); hideDeleteConfirm(); hideActionConfirm(); });
 window.addEventListener('scroll', () => { hideTooltip(); hideDeleteConfirm(); hideActionConfirm(); }, true);
-window.addEventListener('resize', () => { hideTooltip(); hideDeleteConfirm(); hideActionConfirm(); });
+let lastPageSize = getPageSize();
+let resizeRenderTimer = null;
+window.addEventListener('resize', () => {
+  hideTooltip(); hideDeleteConfirm(); hideActionConfirm();
+  clearTimeout(resizeRenderTimer);
+  resizeRenderTimer = setTimeout(() => {
+    const newSize = getPageSize();
+    if (newSize !== lastPageSize) {
+      lastPageSize = newSize;
+      currentPage = 1;
+    }
+    render();
+  }, 200);
+});
 
 document.addEventListener('click', () => {
   hideTooltip();

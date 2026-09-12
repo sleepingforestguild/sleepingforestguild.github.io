@@ -68,7 +68,7 @@
   .pagination button.active { background: var(--accent); border-color: var(--accent); color: #0d0f14; font-weight: 600; }
   .pagination button:disabled { opacity: .4; cursor: not-allowed; }
   .pagination .ellipsis { color: var(--text-muted); padding: 0 4px; }
-  table { width: 100%; border-collapse: collapse; font-size: 15px; table-layout: auto; }
+  table { width: auto; min-width: 100%; border-collapse: collapse; font-size: 15px; table-layout: fixed; }
   thead th {
     text-align: left; padding: 14px 16px; color: var(--text-muted);
     border-bottom: 1px solid var(--border); font-weight: 500; font-size: 12px;
@@ -107,6 +107,8 @@
   .status { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-secondary); white-space: nowrap; position: relative; }
   .status[data-tooltip] { cursor: pointer; }
   .status.clickable { cursor: pointer; }
+  .status[tabindex]:focus { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+  .search-highlight { background: rgba(124,140,248,.35); color: inherit; border-radius: 3px; padding: 0 1px; }
   .tooltip-fixed {
     position: fixed; display: none; background: #000; color: #fff; padding: 6px 10px;
     border-radius: 6px; font-size: 12px; white-space: nowrap; z-index: 1000;
@@ -361,12 +363,12 @@
     <table>
       <thead>
         <tr>
-          <th style="width:16%" class="sortable" data-sort="name">Item<span class="sort-arrow"></span></th>
-          <th style="width:9%" class="sortable" data-sort="category">Category<span class="sort-arrow"></span></th>
-          <th style="width:9%" class="sortable" data-sort="class">Class<span class="sort-arrow"></span></th>
-          <th style="width:9%" class="sortable" data-sort="owner">Added by<span class="sort-arrow"></span></th>
-          <th style="width:47%">Affixes</th>
-          <th style="width:10%" class="sortable" data-sort="status">Status<span class="sort-arrow"></span></th>
+          <th id="thName" class="sortable" data-sort="name">Item<span class="sort-arrow"></span></th>
+          <th id="thCategory" class="sortable" data-sort="category">Category<span class="sort-arrow"></span></th>
+          <th id="thClass" class="sortable" data-sort="class">Class<span class="sort-arrow"></span></th>
+          <th id="thOwner" class="sortable" data-sort="owner">Added by<span class="sort-arrow"></span></th>
+          <th id="thAffixes">Affixes</th>
+          <th id="thStatus" class="sortable" data-sort="status">Status<span class="sort-arrow"></span></th>
         </tr>
       </thead>
       <tbody id="rows"></tbody>
@@ -618,6 +620,43 @@ function debounce(fn, delay) {
 }
 const debouncedSearchRender = debounce(() => { currentPage = 1; render(); }, 200);
 
+// Small self-contained typo tolerance for the search box - deliberately not pulling in a
+// fuzzy-search library, since the item/affix vocabulary here is small and fixed (comes
+// straight from items_data.py), so a full library is more weight than the problem needs.
+function levenshtein(a, b) {
+  const dp = [];
+  for (let i = 0; i <= a.length; i++) dp.push([i]);
+  for (let j = 0; j <= b.length; j++) dp[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
+    }
+  }
+  return dp[a.length][b.length];
+}
+function fuzzyMatch(text, query) {
+  if (!query) return true;
+  text = (text || '').toLowerCase();
+  query = query.toLowerCase();
+  if (text.includes(query)) return true;
+  const threshold = query.length > 5 ? 2 : 1;
+  return text.split(/\s+/).some(word => levenshtein(word, query) <= threshold);
+}
+// Only highlights an exact substring match - a fuzzy/typo match has no single contiguous
+// span to highlight, so it degrades gracefully to plain (escaped) text in that case.
+function highlightMatch(text, query) {
+  text = text || '';
+  if (!query) return escapeHtml(text);
+  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx === -1) return escapeHtml(text);
+  const before = text.slice(0, idx);
+  const match = text.slice(idx, idx + query.length);
+  const after = text.slice(idx + query.length);
+  return `${escapeHtml(before)}<mark class="search-highlight">${escapeHtml(match)}</mark>${escapeHtml(after)}`;
+}
+
 function itemMatchesFilters(i) {
   if (!selType) return true;
   const cfg = TYPE_CONFIG[selType];
@@ -824,8 +863,10 @@ function updateSortArrows() {
     const arrow = th.querySelector('.sort-arrow');
     if (columnSort && columnSort.key === th.dataset.sort) {
       arrow.textContent = columnSort.dir === 'asc' ? '\u25B2' : '\u25BC';
+      th.setAttribute('aria-sort', columnSort.dir === 'asc' ? 'ascending' : 'descending');
     } else {
       arrow.textContent = '';
+      th.setAttribute('aria-sort', 'none');
     }
   });
 }
@@ -1713,11 +1754,49 @@ async function requestReturn(itemId) {
   });
 }
 
+// Column widths are measured against the entire filtered set (every matching item, not just
+// the current page), so they stay constant across pagination and column-sort - they only
+// change when the actual filter/search changes, since that's the only thing that changes
+// what "filtered" contains. This is what fixes columns jumping around between pages.
+function computeColumnWidths(filteredItems) {
+  const canvas = computeColumnWidths._canvas || (computeColumnWidths._canvas = document.createElement('canvas'));
+  const ctx = canvas.getContext('2d');
+  ctx.font = '15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+  const measure = (t) => ctx.measureText(t || '').width;
+
+  let maxName = measure('Item'), maxCategory = measure('Category'), maxClass = measure('Class'), maxOwner = measure('Added by'), maxAffix = measure('Affixes');
+  filteredItems.forEach(i => {
+    maxName = Math.max(maxName, measure(i.name));
+    maxCategory = Math.max(maxCategory, measure(i.category));
+    maxClass = Math.max(maxClass, measure(abbreviateClasses(i.classes)));
+    maxOwner = Math.max(maxOwner, measure(i.owner_name));
+    const affixWidth = (i.affixes || []).reduce((sum, a) => sum + measure(a) + 34, 0);
+    maxAffix = Math.max(maxAffix, affixWidth);
+  });
+
+  return {
+    name: Math.ceil(maxName) + 60,
+    category: Math.ceil(maxCategory) + 32,
+    class: Math.ceil(maxClass) + 32,
+    owner: Math.ceil(maxOwner) + 32,
+    affixes: Math.ceil(maxAffix) + 32,
+    status: 130,
+  };
+}
+function applyColumnWidths(w) {
+  document.getElementById('thName').style.width = w.name + 'px';
+  document.getElementById('thCategory').style.width = w.category + 'px';
+  document.getElementById('thClass').style.width = w.class + 'px';
+  document.getElementById('thOwner').style.width = w.owner + 'px';
+  document.getElementById('thAffixes').style.width = w.affixes + 'px';
+  document.getElementById('thStatus').style.width = w.status + 'px';
+}
+
 function render() {
   saveFilterState();
-  const q = document.getElementById('search').value.toLowerCase();
+  const q = document.getElementById('search').value.trim();
   const filtered = items.filter(i =>
-    i.name.toLowerCase().includes(q) &&
+    (!q || fuzzyMatch(i.name, q) || (i.affixes || []).some(a => fuzzyMatch(a, q))) &&
     itemMatchesFilters(i) &&
     (selLevel === null || i.level === selLevel) &&
     (!mineOnly || !currentUser || i.owner_id === currentUser.id || i.borrower_id === currentUser.id) &&
@@ -1739,6 +1818,7 @@ function render() {
     const aRarity = RARITY_ORDER.indexOf(a.rarity), bRarity = RARITY_ORDER.indexOf(b.rarity);
     return bRarity - aRarity;
   });
+  applyColumnWidths(computeColumnWidths(filtered));
   const pageSize = getPageSize();
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   if (currentPage > totalPages) currentPage = totalPages;
@@ -1784,18 +1864,21 @@ function render() {
     const statusClickable = !!statusAction;
     const canRemoveThis = canManage && (i.owner_id === currentUser.id || currentUser.officer);
     const tr = document.createElement('tr');
+    // Enter-to-activate is scoped to borrow/return specifically - those are the actions
+    // worth triggering from the keyboard; tooltip/delete stay click/tap only.
+    const keyboardActionable = statusAction === 'borrow' || statusAction === 'return';
     tr.innerHTML = `
       <td>
         <div class="itemname">
-          <span class="item-text${canRemoveThis ? ' clickable' : ''}" style="color:${rarityColor}"${canRemoveThis ? ` data-id="${i.id}" data-action="delete"` : ''}>${escapeHtml(i.name)}</span>
+          <span class="item-text${canRemoveThis ? ' clickable' : ''}" style="color:${rarityColor}"${canRemoveThis ? ` data-id="${i.id}" data-action="delete"` : ''}>${highlightMatch(i.name, q)}</span>
           ${isNew ? '<span class="newbadge">New</span>' : ''}
         </div>
       </td>
       <td class="muted" data-label="Category">${escapeHtml(i.category || '')}</td>
       <td class="muted" data-label="Class">${escapeHtml(abbreviateClasses(i.classes))}</td>
       <td class="muted" data-label="Added by">${escapeHtml(i.owner_name || '')}</td>
-      <td><div class="affixlist">${(i.affixes || []).map(a => `<span class="affix">${escapeHtml(a)}</span>`).join('')}</div></td>
-      <td><span class="status${statusClickable ? ' clickable' : ''}"${statusAction ? ` data-id="${i.id}" data-action="${statusAction}" data-title="${escapeHtml(statusTitle)}"` : ''}><span class="dot" style="background:${statusColor}"></span>${statusLabel}</span></td>
+      <td><div class="affixlist">${(i.affixes || []).map(a => `<span class="affix">${highlightMatch(a, q)}</span>`).join('')}</div></td>
+      <td><span class="status${statusClickable ? ' clickable' : ''}"${statusAction ? ` data-id="${i.id}" data-action="${statusAction}" data-title="${escapeHtml(statusTitle)}"` : ''}${keyboardActionable ? ' tabindex="0"' : ''}><span class="dot" style="background:${statusColor}"></span>${statusLabel}</span></td>
     `;
     rows.appendChild(tr);
   });
@@ -1831,6 +1914,14 @@ document.getElementById('rows').addEventListener('click', (e) => {
     const d = item.borrowed_at ? new Date(item.borrowed_at).toLocaleDateString() : '';
     showActionConfirm(target, id, `Rented by you${d ? ' on ' + d : ''}. Return?`, 'Return', () => requestReturn(id));
   }
+});
+
+document.getElementById('rows').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  const target = e.target.closest('[data-action="borrow"], [data-action="return"]');
+  if (!target) return;
+  e.preventDefault();
+  target.click();
 });
 
 function renderLoadingSkeleton(rowCount = 8) {

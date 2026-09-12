@@ -93,10 +93,10 @@
     position: fixed; bottom: 24px; right: 24px; max-width: 340px; background: var(--surface);
     border: 1px solid var(--border); border-left: 3px solid var(--accent); color: var(--text);
     padding: 14px 18px; border-radius: 10px; font-size: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.5);
-    z-index: 2000; opacity: 0; transform: translateY(12px); pointer-events: none;
+    z-index: 2000; opacity: 0; transform: translateY(12px); pointer-events: none; cursor: pointer;
     transition: opacity .25s ease, transform .25s ease;
   }
-  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
   .toast.error { border-left-color: #f87171; }
   @media (max-width: 768px) {
     .toast { bottom: auto; top: 16px; right: 16px; left: 16px; max-width: none; }
@@ -312,7 +312,7 @@
   <span id="actionConfirmText"></span>
   <button class="rowbtn" id="actionConfirmBtn"></button>
 </div>
-<div class="toast" id="toastEl"></div>
+<div class="toast" id="toastEl" role="alert" aria-live="assertive"></div>
 <button id="topBtn" class="back-to-top">&uarr;</button>
 
 <div class="modalbg" id="addModalBg" style="display:none;">
@@ -1351,8 +1351,12 @@ function showToast(message, isError = false) {
   toastEl.textContent = message;
   toastEl.classList.toggle('error', isError);
   toastEl.classList.add('show');
-  toastTimeout = setTimeout(() => { toastEl.classList.remove('show'); }, 3000);
+  toastTimeout = setTimeout(() => { toastEl.classList.remove('show'); }, 6000);
 }
+toastEl.addEventListener('click', () => {
+  clearTimeout(toastTimeout);
+  toastEl.classList.remove('show');
+});
 
 const actionConfirmEl = document.getElementById('actionConfirmEl');
 const actionConfirmText = document.getElementById('actionConfirmText');

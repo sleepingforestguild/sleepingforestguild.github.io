@@ -4,14 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SleepingForest Chest — Pending Requests</title>
-<link rel="icon" type="image/png" href="favicon.png?v=2">
-<link rel="shortcut icon" type="image/png" href="favicon.png?v=2">
-<link rel="apple-touch-icon" href="favicon.png?v=2">
+<link rel="icon" type="image/png" href="favicon.png?v=3">
+<link rel="shortcut icon" type="image/png" href="favicon.png?v=3">
+<link rel="apple-touch-icon" href="favicon.png?v=3">
 <style>
   :root {
     --bg: #0d0f14; --surface: #161922; --border: #2a2e3a;
     --text: #e8e9ed; --text-secondary: #9a9ea8; --text-muted: #6b6f7a;
     --accent: #7c8cf8;
+    --rarity-common: #d1d5db; --rarity-uncommon: #4ade80; --rarity-rare: #60a5fa;
+    --rarity-epic: #c084fc; --rarity-legendary: #fb923c; --rarity-mythic: #f472b6;
   }
   * { box-sizing: border-box; }
   body {
@@ -34,12 +36,13 @@
     border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;
   }
   .btn-discord:hover { background: #4752c4; }
-  .link-muted { color: var(--text-muted); font-size: 13px; cursor: pointer; text-decoration: underline; background: none; border: none; }
+  .link-muted { color: var(--text-muted); font-size: 13px; cursor: pointer; text-decoration: underline; background: none; border: none; padding: 8px 4px; font-family: inherit; }
 
   .state-message {
     background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
     padding: 40px; text-align: center; color: var(--text-secondary); font-size: 15px;
   }
+  .notice { color: #fbbf24; font-size: 13px; margin: -16px 0 16px; display: none; }
 
   .card {
     background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
@@ -70,7 +73,7 @@
   .card-actions { display: flex; gap: 8px; margin-top: 14px; }
   .btn {
     padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
-    cursor: pointer; border: 1px solid transparent;
+    cursor: pointer; border: 1px solid transparent; min-height: 36px;
   }
   .btn-approve { background: rgba(74,222,128,.15); border-color: #4ade80; color: #4ade80; }
   .btn-approve:hover { background: rgba(74,222,128,.28); }
@@ -92,6 +95,7 @@
     body { padding: 1.5rem 1rem; }
     .topbar { flex-direction: column; }
     .card { flex-direction: column; }
+    .btn { min-height: 40px; flex: 1; }
     .toast { left: 16px; right: 16px; bottom: 16px; max-width: none; }
   }
 </style>
@@ -106,6 +110,7 @@
     </div>
     <div class="authbox" id="authBox"></div>
   </div>
+  <p class="notice" id="notice"></p>
 
   <div id="content">
     <div class="state-message" id="loadingMsg">Loading...</div>
@@ -116,13 +121,16 @@
 
 <script>
 const API_BASE = "https://sleepingforest-bot.onrender.com";
-const RARITY_COLORS = {
-  Common: "#d1d5db", Uncommon: "#4ade80", Rare: "#60a5fa", Epic: "#c084fc",
-  Legendary: "#fb923c", Mythic: "#f472b6"
-};
+const SERVER_DOWN = "Can't reach the chest server. It may be waking up - try again in a minute.";
+const POLL_MS = 10000;
 const PLACEHOLDER_ICON = "data:image/svg+xml;utf8," + encodeURIComponent(
   "<svg xmlns='http://www.w3.org/2000/svg' width='60' height='60'><rect width='60' height='60' rx='8' fill='#161922'/><path d='M20 40 L30 20 L40 40 Z' fill='#2a2e3a'/></svg>"
 );
+const $ = (id) => document.getElementById(id);
+
+// Browser storage can throw (Safari with cookies blocked): the page must work without it.
+function getToken() { try { return localStorage.getItem('sf_token'); } catch { return null; } }
+function clearToken() { try { localStorage.removeItem('sf_token'); } catch {} }
 
 function escapeHtml(str) {
   if (str === null || str === undefined) return '';
@@ -134,7 +142,7 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
-const toastEl = document.getElementById('toastEl');
+const toastEl = $('toastEl');
 let toastTimeout = null;
 function showToast(message, isError = false) {
   clearTimeout(toastTimeout);
@@ -148,44 +156,64 @@ toastEl.addEventListener('click', () => {
   toastEl.classList.remove('show');
 });
 
+class ApiError extends Error {
+  constructor(message, status) { super(message); this.status = status; }
+}
+// Whatever goes wrong, the officer gets a sentence, never "Failed to fetch" or a JSON error.
+async function apiFetch(path, { method = 'GET', body } = {}) {
+  const headers = {};
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  let r;
+  try {
+    r = await fetch(API_BASE + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  } catch {
+    throw new ApiError(SERVER_DOWN, 0);
+  }
+  let data = null;
+  try { data = await r.json(); } catch {}
+  if (r.ok && data) return data;
+  if (r.ok) throw new ApiError(SERVER_DOWN, r.status);
+  const message = data && typeof data.error === 'string' ? data.error
+    : (r.status >= 500 ? 'The chest server had a problem. Try again in a minute.' : 'Something went wrong.');
+  throw new ApiError(message, r.status);
+}
+
+function showState(text) {
+  const content = $('content');
+  content.innerHTML = '';
+  const box = document.createElement('div');
+  box.className = 'state-message';
+  box.textContent = text;
+  content.appendChild(box);
+}
+function showNotice(text) {
+  $('notice').textContent = text;
+  $('notice').style.display = text ? 'block' : 'none';
+}
+
 let currentUser = null;
 
-async function loadUser() {
-  const token = localStorage.getItem('sf_token');
-  if (!token) { currentUser = null; return; }
-  try {
-    const r = await fetch(`${API_BASE}/api/me`, { headers: { Authorization: `Bearer ${token}` } });
-    if (!r.ok) throw new Error();
-    currentUser = await r.json();
-  } catch {
-    currentUser = null;
-  }
-}
-
 function renderAuthBox() {
-  const box = document.getElementById('authBox');
+  const box = $('authBox');
   if (currentUser) {
     const avatarUrl = currentUser.avatar
-      ? `https://cdn.discordapp.com/avatars/${currentUser.id}/${currentUser.avatar}.png?size=64`
+      ? `https://cdn.discordapp.com/avatars/${encodeURIComponent(currentUser.id)}/${encodeURIComponent(currentUser.avatar)}.png?size=64`
       : 'https://cdn.discordapp.com/embed/avatars/0.png';
     const displayName = currentUser.ingame_name || currentUser.username;
-    box.innerHTML = `<img src="${avatarUrl}" alt=""><span class="uname">${escapeHtml(displayName)}</span><button class="link-muted" id="logoutBtn">Log out</button>`;
-    document.getElementById('logoutBtn').onclick = () => {
-      localStorage.removeItem('sf_token');
-      window.location.reload();
-    };
+    box.innerHTML = `<img src="${avatarUrl}" alt=""><span class="uname">${escapeHtml(displayName)}</span><button class="link-muted" id="logoutBtn" type="button">Log out</button>`;
+    $('logoutBtn').onclick = () => { clearToken(); window.location.reload(); };
   } else {
-    box.innerHTML = `<button class="btn-discord" id="loginBtn">Log in with Discord</button>`;
-    document.getElementById('loginBtn').onclick = () => {
-      window.location.href = `${API_BASE}/auth/discord/login`;
-    };
+    box.innerHTML = `<button class="btn-discord" id="loginBtn" type="button">Log in with Discord</button>`;
+    $('loginBtn').onclick = () => { window.location.href = `${API_BASE}/auth/discord/login`; };
   }
 }
 
-function timeAgoInfo(iso) {
+function timeAgoInfo(iso, expiresIso) {
   if (!iso) return { text: '', className: '' };
   const diffMs = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diffMs / 60000);
+  const mins = Math.max(0, Math.floor(diffMs / 60000));
   const hours = Math.floor(mins / 60);
   const days = Math.floor(hours / 24);
   let text;
@@ -194,140 +222,188 @@ function timeAgoInfo(iso) {
   else if (hours < 24) text = `${hours}h ago`;
   else text = `${days}d ago`;
   let className = '';
-  if (days >= 7) className = 'stale-critical';
+  if (days >= 5) className = 'stale-critical';
   else if (hours >= 48) className = 'stale-warning';
-  return { text: `Requested ${text}`, className };
+  let expires = '';
+  if (expiresIso) {
+    const left = new Date(expiresIso).getTime() - Date.now();
+    const leftHours = Math.max(0, Math.round(left / 3600000));
+    expires = leftHours >= 48 ? ` · expires in ${Math.round(leftHours / 24)} days` : ` · expires in ${leftHours}h`;
+  }
+  return { text: `Requested ${text}${expires}`, className };
 }
 
-// Polling architecture: fetch silently in the background, compare against the last known
-// list, and only touch the DOM if something actually changed. Without this, a plain
-// setInterval + full rebuild would flash the whole list every cycle and yank the Approve
-// button out from under a moderator mid-click.
+// Polling: fetch quietly, compare with the last list, and only rebuild when something changed,
+// so the Approve button never moves under someone's finger. The "Requested 5m ago" lines are
+// refreshed on every poll. Requests being answered right now keep their buttons disabled.
 let currentPending = [];
 let lastPendingJSON = null;
 let pollTimer = null;
-
-async function pollPending(isFirstLoad) {
-  const content = document.getElementById('content');
-  const token = localStorage.getItem('sf_token');
-  try {
-    const r = await fetch(`${API_BASE}/api/pending`, { headers: { Authorization: `Bearer ${token}` } });
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error || 'Something went wrong.');
-    const json = JSON.stringify(data.pending);
-    if (json === lastPendingJSON) return; // nothing changed - skip the rebuild entirely
-    lastPendingJSON = json;
-    currentPending = data.pending;
-    renderPending(currentPending);
-  } catch (err) {
-    // A background poll failing shouldn't nuke a working view over a transient blip -
-    // only show the error state if this was the very first load.
-    if (isFirstLoad) content.innerHTML = `<div class="state-message">${err.message}</div>`;
-  }
-}
+const inFlight = new Set();
 
 function startPolling() {
   stopPolling();
-  pollTimer = setInterval(() => pollPending(false), 10000);
+  pollTimer = setInterval(() => pollPending(false), POLL_MS);
 }
 function stopPolling() {
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = null;
 }
+
+async function pollPending(isFirstLoad) {
+  try {
+    const data = await apiFetch('/api/pending');
+    showNotice('');
+    const json = JSON.stringify(data.pending);
+    if (json !== lastPendingJSON) {
+      lastPendingJSON = json;
+      currentPending = data.pending;
+      renderPending();
+    } else {
+      refreshTimes();
+    }
+  } catch (err) {
+    if (err.status === 401 || err.status === 403) {  // login expired or not an officer any more: stop asking
+      stopPolling();
+      if (err.status === 401) clearToken();
+      currentUser = null;
+      renderAuthBox();
+      showState(err.status === 401 ? 'Your login expired. Log in with Discord again.' : 'Officers only.');
+      return false;
+    }
+    if (isFirstLoad) showState(err.message);
+    else showNotice(`${err.message} Showing the list from ${new Date(lastFetchOk || Date.now()).toLocaleTimeString()}.`);
+    return;
+  }
+  lastFetchOk = Date.now();
+}
+let lastFetchOk = 0;
+
+function refreshTimes() {
+  document.querySelectorAll('.card[data-id]').forEach(card => {
+    const p = currentPending.find(x => x.id === card.dataset.id);
+    if (!p) return;
+    const info = timeAgoInfo(p.created_at, p.expires_at);
+    const el = card.querySelector('.card-time');
+    el.textContent = info.text;
+    el.className = 'card-time ' + info.className;
+  });
+}
+
+function renderPending() {
+  const content = $('content');
+  const visible = currentPending;
+  if (!visible.length) {
+    showState('Nothing pending right now.');
+    return;
+  }
+  content.innerHTML = '';
+  visible.forEach(p => {
+    const timeInfo = timeAgoInfo(p.created_at, p.expires_at);
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.dataset.id = p.id;
+    const kind = p.type === 'borrow' ? 'borrow' : 'return';
+    const rarity = (p.item_rarity || '').toLowerCase().replace(/[^a-z]/g, '');
+    card.innerHTML = `
+      <img class="card-icon" alt="">
+      <div class="card-body">
+        <div class="card-top">
+          <span class="card-title" style="color:var(--rarity-${rarity}, #9a9ea8)">${escapeHtml(p.item_name)}</span>
+          <span class="card-kind ${kind}">${kind === 'borrow' ? 'Borrow' : 'Return'}</span>
+        </div>
+        <div class="card-line">${escapeHtml(p.requester_name)} &rarr; owner ${escapeHtml(p.owner_name || '?')}</div>
+        <div class="card-time ${timeInfo.className}">${escapeHtml(timeInfo.text)}</div>
+        <div class="card-affixes">${(p.item_affixes || []).map(a => `<span class="card-affix">${escapeHtml(a)}</span>`).join('')}</div>
+        <div class="card-actions">
+          <button class="btn btn-approve" type="button" data-approved="true">Approve</button>
+          <button class="btn btn-deny" type="button" data-approved="false">Deny</button>
+        </div>
+      </div>
+    `;
+    // Set in code, not as an inline onerror attribute: the placeholder's quotes broke that one.
+    const img = card.querySelector('.card-icon');
+    img.onerror = function () { this.onerror = null; this.src = PLACEHOLDER_ICON; };
+    img.src = p.item_icon_url || PLACEHOLDER_ICON;
+    card.querySelectorAll('.btn').forEach(btn => {
+      btn.disabled = inFlight.has(p.id);
+      btn.addEventListener('click', () => resolveRequest(p.id, btn.dataset.approved === 'true'));
+    });
+    content.appendChild(card);
+  });
+}
+
+async function resolveRequest(id, approved) {
+  if (inFlight.has(id)) return;
+  inFlight.add(id);
+  const cardNow = () => document.querySelector(`.card[data-id="${CSS.escape(id)}"]`);
+  const setButtons = (disabled, label) => {
+    const card = cardNow();
+    if (!card) return;
+    card.querySelectorAll('.btn').forEach(b => { b.disabled = disabled; });
+    const btn = card.querySelector(`.btn[data-approved="${approved}"]`);
+    if (btn) btn.textContent = label;
+  };
+  setButtons(true, approved ? 'Approving...' : 'Denying...');
+  try {
+    await apiFetch(`/api/pending/${encodeURIComponent(id)}/resolve`, { method: 'POST', body: { approved } });
+    showToast(approved ? 'Request approved.' : 'Request denied.');
+    currentPending = currentPending.filter(p => p.id !== id);
+    lastPendingJSON = JSON.stringify(currentPending);
+    inFlight.delete(id);
+    const card = cardNow();  // looked up now: a poll may have rebuilt the list meanwhile
+    if (card) card.remove();
+    if (!document.querySelector('.card')) showState('Nothing pending right now.');
+  } catch (err) {
+    inFlight.delete(id);
+    showToast(err.message, true);
+    setButtons(false, approved ? 'Approve' : 'Deny');
+    if (err.status === 400) pollPending(false);  // already answered elsewhere: refresh the list
+  }
+}
+
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     stopPolling();
-  } else {
+  } else if (currentUser && currentUser.officer) {
     pollPending(false);
     startPolling();
   }
 });
 
-function renderPending(pending) {
-  const content = document.getElementById('content');
-  if (!pending.length) {
-    content.innerHTML = `<div class="state-message">Nothing pending right now.</div>`;
-    return;
-  }
-  content.innerHTML = '';
-  pending.forEach(p => {
-    const rarityColor = RARITY_COLORS[p.item_rarity] || '#9a9ea8';
-    const timeInfo = timeAgoInfo(p.created_at);
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.innerHTML = `
-      <img class="card-icon" src="${p.item_icon_url || PLACEHOLDER_ICON}" alt="" onerror="this.onerror=null;this.src='${PLACEHOLDER_ICON}';">
-      <div class="card-body">
-        <div class="card-top">
-          <span class="card-title" style="color:${rarityColor}">${escapeHtml(p.item_name)}</span>
-          <span class="card-kind ${p.type}">${p.type === 'borrow' ? 'Borrow' : 'Return'}</span>
-        </div>
-        <div class="card-line">${escapeHtml(p.requester_name)} &rarr; owner ${escapeHtml(p.owner_name || '?')}</div>
-        <div class="card-time ${timeInfo.className}">${timeInfo.text}</div>
-        <div class="card-affixes">${(p.item_affixes || []).map(a => `<span class="card-affix">${escapeHtml(a)}</span>`).join('')}</div>
-        <div class="card-actions">
-          <button class="btn btn-approve" data-id="${p.id}" data-approved="true">Approve</button>
-          <button class="btn btn-deny" data-id="${p.id}" data-approved="false">Deny</button>
-        </div>
-      </div>
-    `;
-    content.appendChild(card);
-  });
-
-  content.querySelectorAll('.btn[data-id]').forEach(btn => {
-    btn.addEventListener('click', () => resolveRequest(btn));
-  });
-}
-
-async function resolveRequest(btn) {
-  const id = btn.dataset.id;
-  const approved = btn.dataset.approved === 'true';
-  const card = btn.closest('.card');
-  const actionButtons = card.querySelectorAll('.btn');
-  actionButtons.forEach(b => b.disabled = true);
-  btn.textContent = approved ? 'Approving...' : 'Denying...';
-
-  try {
-    const token = localStorage.getItem('sf_token');
-    const r = await fetch(`${API_BASE}/api/pending/${id}/resolve`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ approved }),
-    });
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error || 'Something went wrong.');
-    showToast(approved ? 'Request approved.' : 'Request denied.');
-    currentPending = currentPending.filter(p => p.id !== id);
-    lastPendingJSON = JSON.stringify(currentPending);
-    card.remove();
-    if (!document.querySelector('.card')) {
-      document.getElementById('content').innerHTML = `<div class="state-message">Nothing pending right now.</div>`;
-    }
-  } catch (err) {
-    showToast(err.message, true);
-    actionButtons.forEach(b => b.disabled = false);
-    btn.textContent = approved ? 'Approve' : 'Deny';
-  }
-}
-
 window.addEventListener('pageshow', (event) => {
   if (event.persisted) window.location.reload();
 });
 
+async function loadUser() {
+  if (!getToken()) return null;
+  try {
+    return await apiFetch('/api/me');
+  } catch (err) {
+    if (err.status === 401) { clearToken(); return null; }
+    throw err;
+  }
+}
+
 (async function init() {
-  await loadUser();
+  try {
+    currentUser = await loadUser();
+  } catch (err) {
+    renderAuthBox();
+    showState(err.message);
+    setTimeout(() => window.location.reload(), 30000);  // the bot may be restarting: try again shortly
+    return;
+  }
   renderAuthBox();
-  const content = document.getElementById('content');
   if (!currentUser) {
-    content.innerHTML = `<div class="state-message">Log in with Discord to view pending requests.</div>`;
+    showState('Log in with Discord to view pending requests.');
     return;
   }
   if (!currentUser.officer) {
-    content.innerHTML = `<div class="state-message">Officers only.</div>`;
+    showState('Officers only.');
     return;
   }
-  await pollPending(true);
-  startPolling();
+  if (await pollPending(true) !== false) startPolling();
 })();
 </script>
 </body>

@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SleepingForest Community Chest</title>
-<link rel="icon" type="image/png" href="favicon.png?v=2">
-<link rel="shortcut icon" type="image/png" href="favicon.png?v=2">
-<link rel="apple-touch-icon" href="favicon.png?v=2">
+<link rel="icon" type="image/png" href="favicon.png?v=3">
+<link rel="shortcut icon" type="image/png" href="favicon.png?v=3">
+<link rel="apple-touch-icon" href="favicon.png?v=3">
 <style>
   :root {
     --bg: #0d0f14; --surface: #161922; --border: #2a2e3a;
@@ -14,6 +14,7 @@
     --accent: #7c8cf8;
     --rarity-common: #d1d5db; --rarity-uncommon: #4ade80; --rarity-rare: #60a5fa;
     --rarity-epic: #c084fc; --rarity-legendary: #fb923c; --rarity-mythic: #f472b6;
+    --status-available: #4ade80; --status-waiting: #fbbf24; --status-out: #f87171;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   button:focus:not(:focus-visible) { outline: none; }
@@ -22,7 +23,8 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     margin: 0; padding: 3rem 4vw;
   }
-  .wrap { max-width: 1600px; margin: 0 auto; }
+  /* Room under the last row, so the back-to-top button never sits on the page buttons. */
+  .wrap { max-width: 1600px; margin: 0 auto; padding-bottom: 72px; }
   h1 { font-size: 32px; font-weight: 600; margin: 0 0 6px; }
   .sub { color: var(--text-secondary); font-size: 15px; margin: 0; }
   .row { display: flex; gap: 10px; margin-bottom: 24px; }
@@ -80,7 +82,8 @@
   thead th:last-child { border-top-right-radius: 13px; }
   thead th.sortable { cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
   thead th.sortable:hover { color: var(--text); }
-  thead th.sortable:focus, thead th.sortable:focus-visible { outline: none; }
+  thead th.sortable:focus:not(:focus-visible) { outline: none; }
+  thead th.sortable:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .sort-arrow { display: inline-block; width: 10px; margin-left: 3px; font-size: 10px; opacity: .7; }
   tbody td { padding: 14px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; white-space: nowrap; }
   .tablewrap {
@@ -90,10 +93,15 @@
   .itemname { display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 15px; white-space: nowrap; }
   .item-text.clickable { cursor: pointer; }
   .item-text.clickable:hover { text-decoration: underline; }
+  .item-text.clickable:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
   .newbadge {
     font-size: 10px; font-weight: 600; background: var(--accent); color: #0d0f14;
     padding: 2px 7px; border-radius: 5px; letter-spacing: .03em; text-transform: uppercase;
     animation: pulse 2s ease-in-out infinite; flex-shrink: 0; pointer-events: none; user-select: none;
+  }
+  .stackbadge {
+    font-size: 12px; font-weight: 600; background: var(--bg); color: var(--text-secondary);
+    padding: 2px 7px; border-radius: 5px; flex-shrink: 0;
   }
   @keyframes pulse {
     0%, 100% { opacity: 1; }
@@ -106,23 +114,24 @@
     font-size: 11px; background: var(--bg); padding: 3px 8px; border-radius: 6px;
     color: var(--text-secondary); white-space: nowrap; display: inline-block;
   }
-  .status { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-secondary); white-space: nowrap; position: relative; }
-  .status[data-tooltip] { cursor: pointer; }
+  .status { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-secondary); white-space: nowrap; position: relative; }
   .status.clickable { cursor: pointer; }
-  .status[tabindex]:focus { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
-  .status[tabindex]:focus:not(:focus-visible) { outline: none; }
+  .status.clickable:focus { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+  .status.clickable:focus:not(:focus-visible) { outline: none; }
   .search-highlight { background: rgba(124,140,248,.35); color: inherit; border-radius: 3px; padding: 0 1px; }
   .tooltip-fixed {
     position: fixed; display: none; background: #000; color: #fff; padding: 6px 10px;
-    border-radius: 6px; font-size: 12px; white-space: nowrap; z-index: 1000;
+    border-radius: 6px; font-size: 12px; max-width: min(320px, calc(100vw - 16px)); z-index: 1000;
     box-shadow: 0 4px 12px rgba(0,0,0,.5); pointer-events: none;
   }
-  .delete-confirm {
+  .confirm-pop {
     position: fixed; display: none; align-items: center; gap: 10px; background: var(--surface);
     border: 1px solid var(--border); padding: 8px 10px 8px 14px; border-radius: 10px;
     font-size: 13px; color: var(--text-secondary); z-index: 1000; box-shadow: 0 4px 16px rgba(0,0,0,.5);
+    max-width: calc(100vw - 12px);
   }
-  .delete-confirm span { white-space: nowrap; }
+  .confirm-pop span { white-space: normal; }
+  .confirm-pop .rowbtn { flex-shrink: 0; }
   .toast {
     position: fixed; bottom: 24px; right: 24px; max-width: 340px; background: var(--surface);
     border: 1px solid var(--border); border-left: 3px solid var(--accent); color: var(--text);
@@ -136,6 +145,7 @@
     .toast { bottom: auto; top: 16px; right: 16px; left: 16px; max-width: none; }
   }
   .empty, .loading { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 15px; }
+  .loading button { margin-left: 8px; }
 
   .topbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 32px; }
   .title-row { display: flex; align-items: center; gap: 14px; }
@@ -143,16 +153,22 @@
     width: 48px; height: 48px; border-radius: 50%; flex-shrink: 0;
     box-shadow: 0 0 12px rgba(124, 140, 248, 0.3);
   }
-  .authbox { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .authbox { display: flex; align-items: center; gap: 10px; flex-shrink: 0; flex-wrap: wrap; }
   .authbox img { width: 32px; height: 32px; border-radius: 50%; }
   .authbox .uname { font-size: 14px; color: var(--text); }
+  .authbox .note { font-size: 13px; color: var(--text-muted); }
+  .officer-link { color: var(--accent); font-size: 13px; text-decoration: none; border: 1px solid var(--accent); border-radius: 8px; padding: 4px 10px; }
+  .officer-link:hover { background: rgba(124,140,248,.15); }
   .btn-discord {
     background: #5865F2; border: none; color: #fff; padding: 10px 18px;
     border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;
   }
   .btn-discord:hover { background: #4752c4; }
-  .link-muted { color: var(--text-muted); font-size: 13px; cursor: pointer; text-decoration: underline; background: none; border: none; }
-  .count { color: var(--text-muted); font-size: 13px; margin: -12px 0 14px; }
+  .link-muted { color: var(--text-muted); font-size: 13px; cursor: pointer; text-decoration: underline; background: none; border: none; padding: 0; font-family: inherit; }
+  .countrow { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: -12px 0 14px; }
+  .count { color: var(--text-muted); font-size: 13px; margin: 0; }
+  .count .link-muted { margin-left: 10px; }
+  .sort-select { display: none; }
   .autherror { color: #f87171; font-size: 13px; margin: -18px 0 20px; }
 
   .rowbtn {
@@ -160,6 +176,7 @@
     padding: 5px 12px; border-radius: 7px; font-size: 12px; cursor: pointer; white-space: nowrap;
   }
   .rowbtn:hover { background: rgba(124,140,248,.28); }
+  .rowbtn:disabled { opacity: .6; cursor: default; }
   .rowbtn.danger { background: rgba(248,113,113,.12); border-color: #f87171; color: #f87171; }
   .rowbtn.danger:hover { background: rgba(248,113,113,.25); }
 
@@ -171,7 +188,7 @@
     background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
     padding: 28px; width: 100%; max-width: 520px; max-height: 85vh; overflow-y: auto;
   }
-  
+
   /* Modal state when converted entirely into a pasted preview card */
   .modal.card-mode {
     padding: 0; max-width: 420px; background: #11131a; border: 1px solid #2a2e3a;
@@ -184,15 +201,16 @@
   #modalAffixWrap { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--border); }
   #modalAffixWrap label { margin-top: 0; }
   #modalAffixWrap .pillrow { margin-bottom: 0; }
+  /* 16px text: iPhones zoom the whole page in when a smaller field is tapped. */
   #defaultUiWrap input[type=text], #defaultUiWrap select {
     width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text);
-    padding: 11px 14px; border-radius: 9px; font-size: 15px; height: 44px; line-height: 1.4;
+    padding: 11px 14px; border-radius: 9px; font-size: 16px; height: 44px; line-height: 1.4;
     box-sizing: border-box; font-family: inherit;
   }
   #defaultUiWrap textarea.paste-box {
     width: 100%; height: 44px; min-height: 44px; max-height: 44px; resize: none; overflow: hidden;
     background: var(--bg); border: 1px solid var(--border); color: var(--text);
-    padding: 11px 14px; border-radius: 9px; font-size: 15px; line-height: 1.4;
+    padding: 11px 14px; border-radius: 9px; font-size: 16px; line-height: 1.4;
     box-sizing: border-box; font-family: inherit; white-space: nowrap;
   }
   #defaultUiWrap textarea.paste-box::placeholder { color: var(--text-muted); }
@@ -201,6 +219,7 @@
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%239a9ea8'/></svg>");
     background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px;
   }
+  #defaultUiWrap select.needs-pick { border-color: var(--status-waiting); }
   .modal-close { float: right; background: none; border: none; color: var(--text-muted); font-size: 24px; cursor: pointer; line-height: 1; padding: 0; }
   .modal-close:hover { color: #fff; }
   .modal-actions { display: flex; gap: 10px; margin-top: 22px; }
@@ -210,6 +229,7 @@
   .btn-cancel { background: var(--bg); border: 1px solid var(--border); color: var(--text); }
   .modal-error { color: #f87171; font-size: 13px; margin-top: 10px; display: none; }
   .modal-hint { color: var(--text-muted); font-size: 12px; margin: 6px 0 0; }
+  .modal-hint.warn { color: var(--status-waiting); }
 
   /* Either/Or Full Card View Styles */
   #previewCard { display: none; width: 100%; }
@@ -227,22 +247,24 @@
   .pc-info { display: flex; flex-direction: column; justify-content: center; padding-right: 20px; }
   .pc-name { font-weight: 600; font-size: 18px; line-height: 1.2; }
   .pc-sub { color: #9a9ea8; font-size: 13px; margin-top: 6px; }
-  
+
   .pc-close { position: absolute; top: 16px; right: 16px; background: none; border: none; color: #9a9ea8; font-size: 24px; cursor: pointer; padding: 4px; line-height: 1; }
   .pc-close:hover { color: #fff; }
 
   .pc-body { padding: 0 20px; }
   .pc-section { border-bottom: 1px solid #2a2e3a; padding: 18px 0; }
+  .pc-section.last { border-bottom: none; }
   .pc-sec-title {
     font-size: 11px; font-weight: 700; color: #6b6f7a; text-transform: uppercase;
     letter-spacing: 0.08em; margin-bottom: 14px;
   }
-  .pc-row { display: flex; justify-content: space-between; align-items: center; font-size: 14.5px; margin-bottom: 10px; }
+  .pc-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 14.5px; margin-bottom: 10px; }
   .pc-row:last-child { margin-bottom: 0; }
   .pc-row span:first-child { color: #d1d5db; }
   .pc-row span:last-child { font-weight: 600; color: #fff; text-align: right; }
+  .pc-row.unsaved span { color: #f87171 !important; }
   .pc-val-green { color: #4ade80 !important; }
-  
+
   .pc-footer { background: #161922; padding: 20px; border-top: 1px solid #2a2e3a; }
   .pc-btn-purple {
     width: 100%; background: #5a4ee4; color: #fff; border: none;
@@ -252,6 +274,8 @@
   }
   .pc-btn-purple:hover { background: #4b41cc; }
   .pc-btn-purple:disabled { opacity: 0.6; cursor: not-allowed; }
+  .pc-edit { display: block; margin: 12px auto 0; }
+  .pc-note { color: #9a9ea8; font-size: 13px; text-align: center; margin: -10px 0 10px; display: none; }
 
   .back-to-top {
     position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
@@ -269,6 +293,7 @@
     .topbar { flex-direction: column; margin-bottom: 20px; }
     .header-icon { align-self: flex-start; }
     .authbox { margin-top: 4px; }
+    .authbox .link-muted { padding: 8px 4px; }
     .row {
       display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
       grid-template-areas: "search search" "mine add" "reset reset";
@@ -281,6 +306,11 @@
     #rentedOnlyBtn { grid-area: rented; }
     .row button.reset { min-width: 0; padding: 11px 14px; width: 100%; }
     thead th { position: static; }
+    #removeHint { display: none !important; }
+    .sort-select {
+      display: block; background: var(--surface); border: 1px solid var(--border); color: var(--text);
+      border-radius: 8px; padding: 7px 10px; font-size: 16px; font-family: inherit;
+    }
 
     /* Mobile card layout: each row becomes a stacked card instead of a horizontally-
        scrolled table. Item+Status share a header line, Affixes gets its own full-width
@@ -308,6 +338,12 @@
     }
     .affixlist { flex-wrap: wrap; }
     .itemname { white-space: normal; }
+    /* The status is the main button on a phone: a proper 40px tap target. */
+    .status.clickable {
+      min-height: 40px; padding: 0 12px; border: 1px solid var(--border); border-radius: 10px;
+      background: var(--bg);
+    }
+    .confirm-pop .rowbtn { min-height: 40px; padding: 8px 16px; font-size: 14px; }
   }
 </style>
 </head>
@@ -315,7 +351,7 @@
 <div class="wrap">
   <div class="topbar">
     <div class="title-row">
-      <img src="chest-icon.png" alt="" class="header-icon" loading="lazy">
+      <img src="chest-icon.png?v=3" alt="" class="header-icon" width="48" height="48">
       <div>
         <h1>SleepingForest Community Chest</h1>
         <p class="sub">Browse the chest, donate gear, or request a borrow. Discord handles the rest!</p>
@@ -327,9 +363,9 @@
   <p class="autherror" id="linkHint" style="display:none; color: var(--text-muted);"></p>
 
   <div class="row">
-    <input type="text" id="search" placeholder="Search items...">
-    <button class="reset" id="rentedOnlyBtn" style="display:none;">Rented Only</button>
-    <button class="reset" id="mineBtn" style="display:none;">My Items</button>
+    <input type="text" id="search" placeholder="Search name, rarity, affix or owner..." aria-label="Search items">
+    <button class="reset" id="rentedOnlyBtn" style="display:none;" aria-pressed="false">Rented Only</button>
+    <button class="reset" id="mineBtn" style="display:none;" aria-pressed="false">My Items</button>
     <button class="reset" id="addBtn" style="display:none;">+ Add Item</button>
     <button class="reset" id="resetBtn">Reset<span class="filter-badge" id="activeFilterBadge" style="display:none;"></span></button>
   </div>
@@ -358,26 +394,36 @@
     </div>
   </div>
 
-  <div style="display:flex; justify-content:space-between; align-items:baseline;">
-    <p class="count" id="itemCount"></p>
+  <div class="countrow">
+    <p class="count"><span id="itemCount"></span><button class="link-muted" id="shareBtn" type="button" style="display:none;">Copy link to this view</button></p>
     <p class="count" id="removeHint" style="display:none;">Click your item's name to remove it.</p>
+    <select class="sort-select" id="sortSelect" aria-label="Sort by">
+      <option value="">Sort: newest and available first</option>
+      <option value="name:asc">Item A to Z</option>
+      <option value="name:desc">Item Z to A</option>
+      <option value="category:asc">Category</option>
+      <option value="class:asc">Class</option>
+      <option value="owner:asc">Added by</option>
+      <option value="status:asc">Status: available first</option>
+      <option value="status:desc">Status: lent out first</option>
+    </select>
   </div>
 
   <div class="tablewrap">
     <table>
       <thead>
         <tr>
-          <th id="thName" class="sortable" data-sort="name">Item<span class="sort-arrow"></span></th>
-          <th id="thCategory" class="sortable" data-sort="category">Category<span class="sort-arrow"></span></th>
-          <th id="thClass" class="sortable" data-sort="class">Class<span class="sort-arrow"></span></th>
-          <th id="thOwner" class="sortable" data-sort="owner">Added by<span class="sort-arrow"></span></th>
+          <th id="thName" class="sortable" data-sort="name" tabindex="0">Item<span class="sort-arrow"></span></th>
+          <th id="thCategory" class="sortable" data-sort="category" tabindex="0">Category<span class="sort-arrow"></span></th>
+          <th id="thClass" class="sortable" data-sort="class" tabindex="0">Class<span class="sort-arrow"></span></th>
+          <th id="thOwner" class="sortable" data-sort="owner" tabindex="0">Added by<span class="sort-arrow"></span></th>
           <th id="thAffixes">Affixes</th>
-          <th id="thStatus" class="sortable" data-sort="status">Status<span class="sort-arrow"></span></th>
+          <th id="thStatus" class="sortable" data-sort="status" tabindex="0">Status<span class="sort-arrow"></span></th>
         </tr>
       </thead>
       <tbody id="rows"></tbody>
     </table>
-    <div id="loading" class="loading" style="display:none;">Loading chest...</div>
+    <div id="loading" class="loading" style="display:none;"><span id="loadingText"></span><button class="link-muted" id="retryBtn" type="button" style="display:none;">Try again</button></div>
     <div id="empty" class="empty" style="display:none;">
       <div>No items match those filters.</div>
       <button class="link-muted" id="emptyResetBtn" style="margin-top:10px;">Reset filters</button>
@@ -386,48 +432,46 @@
   <div class="pagination" id="paginationEl" style="display:none;"></div>
 </div>
 
-<div class="tooltip-fixed" id="tooltipEl"></div>
-<div class="delete-confirm" id="deleteConfirmEl">
-  <span>Remove this item?</span>
-  <button class="rowbtn danger" id="deleteConfirmBtn">Delete</button>
-</div>
-<div class="delete-confirm" id="actionConfirmEl">
-  <span id="actionConfirmText"></span>
-  <button class="rowbtn" id="actionConfirmBtn"></button>
+<div class="tooltip-fixed" id="tooltipEl" role="tooltip"></div>
+<div class="confirm-pop" id="confirmEl" role="dialog" aria-live="polite">
+  <span id="confirmText"></span>
+  <button class="rowbtn" id="confirmBtn" type="button"></button>
 </div>
 <div class="toast" id="toastEl" role="alert" aria-live="assertive"></div>
 <button id="topBtn" class="back-to-top" aria-label="Back to top">&uarr;</button>
 
 <div class="modalbg" id="addModalBg" style="display:none;">
-  <div class="modal" id="modalContainer">
-    
+  <div class="modal" id="modalContainer" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+
     <!-- EITHER: Standard form UI -->
     <div id="defaultUiWrap">
       <button class="modal-close" id="modalClose" aria-label="Close">&times;</button>
-      <h2>Add an item</h2>
+      <h2 id="modalTitle">Add an item</h2>
 
       <div id="pasteWrap">
-        <label>Paste item stats (optional)</label>
+        <label for="modalPasteBox">Paste item stats (optional)</label>
         <textarea id="modalPasteBox" class="paste-box" rows="1" placeholder="Paste copied item stats here to auto-fill..."></textarea>
+        <p class="modal-hint warn" id="pasteHint" style="display:none;"></p>
       </div>
 
-      <label>Item</label>
-      <input type="text" id="modalItemInput" list="modalItemList" placeholder="Start typing an item name...">
+      <label for="modalItemInput">Item</label>
+      <input type="text" id="modalItemInput" list="modalItemList" placeholder="Start typing an item name..." autocomplete="off">
       <datalist id="modalItemList"></datalist>
       <p class="modal-hint" id="modalItemHint" style="display:none;">No matching item - pick one from the suggestions or check the spelling.</p>
 
-      <label>Rarity</label>
+      <label for="modalRarity">Rarity</label>
       <select id="modalRarity"></select>
+      <p class="modal-hint warn" id="rarityHint" style="display:none;">Pick the rarity: it wasn't in what you pasted.</p>
 
       <div id="modalAffixWrap" style="display:none;">
-        <label>Affixes</label>
-        <div class="pillrow" id="modalAffixes"></div>
+        <label id="modalAffixLabel">Affixes</label>
+        <div class="pillrow" id="modalAffixes" role="group" aria-labelledby="modalAffixLabel"></div>
       </div>
 
-      <p class="modal-error" id="modalError"></p>
+      <p class="modal-error" id="modalError" role="alert"></p>
       <div class="modal-actions">
-        <button class="btn-cancel" id="modalCancel">Cancel</button>
-        <button class="btn-primary" id="modalSubmit">Add to chest</button>
+        <button class="btn-cancel" id="modalCancel" type="button">Cancel</button>
+        <button class="btn-primary" id="modalSubmit" type="button">Add to chest</button>
       </div>
     </div>
 
@@ -435,7 +479,7 @@
     <div id="previewCard">
       <div class="pc-top">
         <div class="pc-icon-wrap">
-          <img class="pc-icon" id="pcIcon" src="" alt="" loading="lazy">
+          <img class="pc-icon" id="pcIcon" src="" alt="">
           <span class="pc-lv" id="pcLv"></span>
         </div>
         <div class="pc-info">
@@ -444,7 +488,7 @@
         </div>
         <button class="pc-close" id="pcCloseBtn" aria-label="Close">&times;</button>
       </div>
-      
+
       <div class="pc-body">
         <div class="pc-section" id="pcRequirementsSection">
           <div class="pc-sec-title">Requirements</div>
@@ -457,28 +501,29 @@
             <span class="pc-val-green" id="pcClassText"></span>
           </div>
         </div>
-        
+
         <div class="pc-section" id="pcEffectsSection" style="display:none;">
           <div class="pc-sec-title">Effects</div>
           <div id="pcEffects"></div>
         </div>
-        
+
         <div class="pc-section" id="pcAffixesSection" style="display:none;">
           <div class="pc-sec-title">Affixes</div>
           <div id="pcAffixes"></div>
         </div>
       </div>
-      
+
       <div class="pc-footer">
-        <p class="modal-error" id="cardError" style="margin-bottom:12px; text-align:center;"></p>
-        <p id="pcDuplicateHint" style="display:none; color:#9a9ea8; font-size:13px; text-align:center; margin:-10px 0 10px;"></p>
-        <button id="pcBigAddBtn" class="pc-btn-purple">
+        <p class="modal-error" id="cardError" role="alert" style="margin-bottom:12px; text-align:center;"></p>
+        <p class="pc-note" id="pcDuplicateHint"></p>
+        <button id="pcBigAddBtn" class="pc-btn-purple" type="button">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M9.75 19.75v-12a3.5 3.5 0 0 0-3.5-3.5v0" />
             <path d="M2.75 8.25a4 4 0 0 1 4-4h10.5a4 4 0 0 1 4 4v9.5a2 2 0 0 1-2 2H4.75a2 2 0 0 1-2-2zm0 2h18.5M15.5 12V8.5" />
           </svg>
           ADD TO CHEST
         </button>
+        <button class="link-muted pc-edit" id="pcEditBtn" type="button">Something wrong? Edit the details</button>
       </div>
     </div>
 
@@ -486,14 +531,22 @@
 </div>
 
 <script>
-// Rarity colors now live as CSS variables in :root (--rarity-common etc.) instead of being
-// hardcoded here - this just maps a rarity name to its variable reference, with the same
-// gray fallback the old RARITY_COLORS object gave for anything unrecognized.
+// ---------------------------------------------------------------------------------------------
+// Setup
+// ---------------------------------------------------------------------------------------------
+const API_BASE = "https://sleepingforest-bot.onrender.com";
+const SERVER_DOWN = "Can't reach the chest server. It may be waking up - try again in a minute.";
+
+// Rarity colors live as CSS variables in :root (--rarity-common etc.); this maps a rarity name to
+// its variable, with a gray fallback for anything unrecognized.
 function rarityColorVar(rarity) {
   const slug = (rarity || '').toLowerCase();
   return `var(--rarity-${slug}, #9a9ea8)`;
 }
+const RARITY_RANK = { Common: 0, Uncommon: 1, Rare: 2, Epic: 3, Legendary: 4, Mythic: 5 };
 
+// UI grouping of the game's categories (Helmet+Hat shown as one Type etc.). The affix pools and
+// item list come from the bot (/api/item-master), so they're never copied here.
 const ARCHETYPES = {
   Warrior: ["Guardian","Berserker"],
   Ranger:  ["Sniper","Assassin"],
@@ -519,88 +572,26 @@ const TYPE_CONFIG = {
   Tools:     { isTools: true, categories: ["Pickaxe","Axe","Pouch","Basket","Trap","Fishing Rod"] },
 };
 const TYPES = Object.keys(TYPE_CONFIG);
-
-const affixPools = {
-  Helmet: ["Max Health","Max Energy","Attack Power","Critical Chance","Critical Damage","Defense Penetration","Resource Efficiency","Damage Reflect","Health on Crit","Energy on Dodge"],
-  Hat: ["Max Health","Max Energy","Attack Power","Critical Chance","Critical Damage","Defense Penetration","Resource Efficiency","Damage Reflect","Health on Crit","Energy on Dodge"],
-  Bodyarmor: ["Max Health","Max Energy","Defense","Defense Penetration","Resource Efficiency","Damage Reflect","Dodge","Health on Hit","Health on Dodge","Energy on Hit"],
-  Robe: ["Max Health","Max Energy","Defense","Defense Penetration","Resource Efficiency","Damage Reflect","Dodge","Health on Hit","Health on Dodge","Energy on Hit"],
-  Gloves: ["Attack Power","Attack Speed","Critical Chance","Critical Damage","Defense Penetration","Resource Efficiency","Health on Hit","Health on Crit","Energy on Hit","Energy on Crit"],
-  Boots: ["Max Health","Max Energy","Attack Speed","Defense","Health on Dodge","Health on Crit","Energy on Crit","Energy on Dodge","Dodge","Critical Damage"],
-  Shoes: ["Max Health","Max Energy","Attack Speed","Defense","Health on Dodge","Health on Crit","Energy on Crit","Energy on Dodge","Dodge","Critical Damage"],
-  Ring: ["Max Health","Max Energy","Attack Power","Defense","Critical Damage","Defense Penetration","Health on Hit","Health on Crit","Energy on Hit","Energy on Crit","Drop Chance","Gold Find"],
-  Amulet: ["Max Health","Max Energy","Defense","Resource Efficiency","Damage Reflect","Perfect Block","Health on Dodge","Health on Block","Energy on Dodge","Energy on Block","Combat XP","Pet XP"],
-  Shield: ["Max Health","Max Energy","Attack Power","Defense","Resource Efficiency","Damage Reflect","Block Chance","Perfect Block","Health on Block","Energy on Block"],
-  Sword: ["Attack Power","Attack Speed","Critical Chance","Critical Damage","Defense Penetration","Resource Efficiency","Health on Hit","Health on Crit","Energy on Hit","Energy on Crit"],
-  Staff: ["Attack Power","Attack Speed","Critical Chance","Critical Damage","Defense Penetration","Resource Efficiency","Health on Hit","Health on Crit","Energy on Hit","Energy on Crit"],
-  Bow: ["Attack Power","Attack Speed","Critical Chance","Critical Damage","Defense Penetration","Resource Efficiency","Health on Hit","Health on Crit","Energy on Hit","Energy on Crit"]
+const TOOL_CATEGORIES = new Set(TYPE_CONFIG.Tools.categories);
+// Tools don't have a Combat Level requirement - they gate on their matching gathering skill instead.
+const TOOL_SKILL_LABEL = {
+  Pickaxe: "Mining", Axe: "Woodcutting", Trap: "Tracking",
+  "Fishing Rod": "Fishing", Basket: "Gathering", Pouch: "Herbalism",
 };
+const SORT_KEYS = ['name', 'category', 'class', 'owner', 'status'];
+const DAY_MS = 24 * 60 * 60 * 1000;
+const PLACEHOLDER_ICON = "data:image/svg+xml;utf8," + encodeURIComponent(
+  "<svg xmlns='http://www.w3.org/2000/svg' width='60' height='60'><rect width='60' height='60' rx='8' fill='#161922'/><path d='M20 40 L30 20 L40 40 Z' fill='#2a2e3a'/></svg>"
+);
+const $ = (id) => document.getElementById(id);
 
-const RARITY_ORDER = ["Uncommon","Rare","Epic","Legendary","Mythic"];
-const API_BASE = "https://sleepingforest-bot.onrender.com";
-const ITEMS_URL = `${API_BASE}/api/items`;
-
-let items = [];
-
-// Every add/remove goes through this. Guarantees only one mutating request is ever in flight -
-// a second click can't fire its fetch until the first one has fully finished and the DOM
-// already reflects it. This is what actually prevents the add-then-instant-remove race, not a
-// guessed timeout - it's driven by the real server response, however long that takes.
-let mutationQueue = Promise.resolve();
-// While true, item names can't open a new remove confirmation - covers the whole span from
-// clicking "Delete" through the request actually finishing (including queued wait time), not
-// just the button's own disabled state, so a second name-click can't sneak in a new popup.
-let removeInProgress = false;
-function enqueueMutation(taskFn) {
-  const result = mutationQueue.then(taskFn, taskFn);
-  mutationQueue = result.catch(() => {});
-  return result;
-}
-let selType = null, selClass = null, selToolCat = null, selLevel = null;
-let mineOnly = false;
-let rentedOnly = false;
-let currentUser = null;
-const selAffixes = new Set();
-
-function getPageSize() {
-  return window.innerWidth <= 768 ? 25 : 100;
-}
-let currentPage = 1;
-
-// null = default sort (new/available/level/rarity). Set once a column header is clicked.
-let columnSort = null;
-
-// Filter state survives an accidental refresh - saved on every render() call (i.e. every
-// filter change), restored once at load before the first render so pills/search/page all
-// come back exactly as they were left.
-const FILTER_STATE_KEY = 'sf_filter_state';
-function saveFilterState() {
-  try {
-    localStorage.setItem(FILTER_STATE_KEY, JSON.stringify({
-      selType, selClass, selToolCat, selLevel,
-      selAffixes: [...selAffixes],
-      search: document.getElementById('search').value,
-      mineOnly, rentedOnly, columnSort,
-    }));
-  } catch {}
-}
-function loadFilterState() {
-  try {
-    const raw = localStorage.getItem(FILTER_STATE_KEY);
-    if (!raw) return;
-    const s = JSON.parse(raw);
-    selType = s.selType ?? null;
-    selClass = s.selClass ?? null;
-    selToolCat = s.selToolCat ?? null;
-    selLevel = s.selLevel ?? null;
-    (s.selAffixes || []).forEach(a => selAffixes.add(a));
-    if (s.search) document.getElementById('search').value = s.search;
-    mineOnly = !!s.mineOnly;
-    rentedOnly = mineOnly && !!s.rentedOnly;
-    columnSort = s.columnSort ?? null;
-  } catch {}
-}
-loadFilterState();
+// Browser storage can throw (Safari with cookies blocked, some in-app browsers): the page must
+// still work without it, so every read and write goes through these.
+const store = {
+  get(key, session = false) { try { return (session ? sessionStorage : localStorage).getItem(key); } catch { return null; } },
+  set(key, value, session = false) { try { (session ? sessionStorage : localStorage).setItem(key, value); } catch {} },
+  remove(key, session = false) { try { (session ? sessionStorage : localStorage).removeItem(key); } catch {} },
+};
 
 // User-controlled strings (Discord display names, in-game names) go through this before
 // ever being interpolated into an innerHTML template - otherwise someone setting their
@@ -622,48 +613,177 @@ function debounce(fn, delay) {
     timer = setTimeout(() => fn(...args), delay);
   };
 }
-const debouncedSearchRender = debounce(() => { currentPage = 1; render(); }, 200);
 
-// Small self-contained typo tolerance for the search box - deliberately not pulling in a
-// fuzzy-search library, since the item/affix vocabulary here is small and fixed (comes
-// straight from items_data.py), so a full library is more weight than the problem needs.
-function levenshtein(a, b) {
-  const dp = [];
-  for (let i = 0; i <= a.length; i++) dp.push([i]);
-  for (let j = 0; j <= b.length; j++) dp[0][j] = j;
-  for (let i = 1; i <= a.length; i++) {
-    for (let j = 1; j <= b.length; j++) {
-      dp[i][j] = a[i - 1] === b[j - 1]
-        ? dp[i - 1][j - 1]
-        : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
-    }
+function fmtDate(ms) { return new Date(ms).toLocaleDateString(); }
+
+// ---------------------------------------------------------------------------------------------
+// Talking to the bot
+// ---------------------------------------------------------------------------------------------
+class ApiError extends Error {
+  constructor(message, status) { super(message); this.status = status; }
+}
+
+// Every call goes through here, so whatever goes wrong the user gets a sentence, never
+// "Failed to fetch" or "Unexpected token '<'". A 401 on a logged-in call means the login
+// expired: the user is logged out and told so.
+async function apiFetch(path, { method = 'GET', body, auth = false } = {}) {
+  const headers = {};
+  if (auth) {
+    const token = store.get('sf_token');
+    if (token) headers.Authorization = `Bearer ${token}`;
   }
-  return dp[a.length][b.length];
-}
-function fuzzyMatch(text, query) {
-  if (!query) return true;
-  text = (text || '').toLowerCase();
-  query = query.toLowerCase();
-  if (text.includes(query)) return true;
-  const threshold = query.length > 5 ? 2 : 1;
-  return text.split(/\s+/).some(word => levenshtein(word, query) <= threshold);
-}
-// Only highlights an exact substring match - a fuzzy/typo match has no single contiguous
-// span to highlight, so it degrades gracefully to plain (escaped) text in that case.
-function highlightMatch(text, query) {
-  text = text || '';
-  if (!query) return escapeHtml(text);
-  const idx = text.toLowerCase().indexOf(query.toLowerCase());
-  if (idx === -1) return escapeHtml(text);
-  const before = text.slice(0, idx);
-  const match = text.slice(idx, idx + query.length);
-  const after = text.slice(idx + query.length);
-  return `${escapeHtml(before)}<mark class="search-highlight">${escapeHtml(match)}</mark>${escapeHtml(after)}`;
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  let r;
+  try {
+    r = await fetch(API_BASE + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  } catch {
+    throw new ApiError(SERVER_DOWN, 0);
+  }
+  let data = null;
+  try { data = await r.json(); } catch {}
+  if (r.ok && data) return data;
+  if (r.ok) throw new ApiError(SERVER_DOWN, r.status);  // a 2xx that isn't JSON: a page from a proxy in between
+  if (r.status === 401 && auth) {
+    onLoginExpired();
+    throw new ApiError('Your login expired. Log in again.', 401);
+  }
+  const message = data && typeof data.error === 'string' ? data.error
+    : (r.status >= 500 ? 'The chest server had a problem. Try again in a minute.' : 'Something went wrong.');
+  throw new ApiError(message, r.status);
 }
 
+// Every add/remove/request goes through this queue: only one is in flight at a time, so a second
+// click can't race the first. A queued task reads nothing from the page when its turn comes:
+// everything it sends is captured when the button is pressed (an add used to pick up the next
+// paste's affixes while it waited).
+let mutationQueue = Promise.resolve();
+function enqueueMutation(taskFn) {
+  const result = mutationQueue.then(taskFn, taskFn);
+  mutationQueue = result.catch(() => {});
+  return result;
+}
+
+// ---------------------------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------------------------
+let items = [];
+let itemsLoaded = false;
+let itemsLoadedAt = 0;
+let openRequests = 0;
+let master = null;          // /api/item-master: item list, affix pools, abbreviations, rarities
+let masterPromise = null;
+let itemByName = {};
+let currentUser = null;
+let authState = 'none';     // none | checking | ok | offline
+let selType = null, selClass = null, selToolCat = null, selLevel = null;
+let mineOnly = false;
+let rentedOnly = false;
+const selAffixes = new Set();
+let currentPage = 1;
+let columnSort = null;      // null = default order (new, available, level, rarity)
+let busy = false;           // a confirm-popup action is running
+
+function getPageSize() {
+  return window.innerWidth <= 768 ? 25 : 100;
+}
+
+// "New" means added since your last visit. The time of the last visit is kept for this whole tab
+// (sessionStorage), so reloading - coming back from Discord login included - doesn't clear the badges.
+const LAST_VISIT_KEY = 'sf_last_visit';
+const VISIT_BASELINE_KEY = 'sf_visit_baseline';
+let lastVisitTimestamp = Number(store.get(VISIT_BASELINE_KEY, true));
+if (!lastVisitTimestamp) {
+  lastVisitTimestamp = Number(store.get(LAST_VISIT_KEY)) || (Date.now() - DAY_MS);
+  store.set(VISIT_BASELINE_KEY, String(lastVisitTimestamp), true);
+}
+store.set(LAST_VISIT_KEY, String(Date.now()));
+function isItemNew(i) {
+  return !!(i.added_at && new Date(i.added_at).getTime() > lastVisitTimestamp);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Saved filters: they survive a refresh (browser storage) and travel in the address (#t=Ring&q=...),
+// so a link to a view can be shared in Discord.
+// ---------------------------------------------------------------------------------------------
+const FILTER_STATE_KEY = 'sf_filter_state';
+function readHashState() {
+  const raw = location.hash.replace(/^#/, '');
+  if (!raw) return null;
+  const p = new URLSearchParams(raw);
+  if (![...p.keys()].some(k => ['t', 'c', 'k', 'l', 'a', 'q', 's'].includes(k))) return null;
+  const [key, dir] = (p.get('s') || '').split(':');
+  return {
+    selType: p.get('t'), selClass: p.get('c'), selToolCat: p.get('k'),
+    selLevel: p.get('l') ? Number(p.get('l')) : null,
+    selAffixes: p.get('a') ? p.get('a').split(',') : [],
+    search: p.get('q') || '', columnSort: key ? { key, dir: dir === 'desc' ? 'desc' : 'asc' } : null,
+  };
+}
+// Only real keys: a link with "#t=constructor" must not reach into the object's built-in properties.
+function hasOwn(obj, key) { return typeof key === 'string' && Object.prototype.hasOwnProperty.call(obj, key); }
+function applyFilterState(s) {
+  selType = hasOwn(TYPE_CONFIG, s.selType) ? s.selType : null;
+  selClass = hasOwn(ARCHETYPES, s.selClass) ? s.selClass : null;
+  selToolCat = TOOL_CATEGORIES.has(s.selToolCat) ? s.selToolCat : null;
+  selLevel = Number.isFinite(s.selLevel) ? s.selLevel : null;
+  selAffixes.clear();
+  (Array.isArray(s.selAffixes) ? s.selAffixes : []).forEach(a => { if (typeof a === 'string') selAffixes.add(a); });
+  $('search').value = typeof s.search === 'string' ? s.search : '';
+  mineOnly = !!s.mineOnly;
+  rentedOnly = mineOnly && !!s.rentedOnly;
+  columnSort = s.columnSort && SORT_KEYS.includes(s.columnSort.key) ? { key: s.columnSort.key, dir: s.columnSort.dir === 'desc' ? 'desc' : 'asc' } : null;
+}
+function loadFilterState() {
+  let s = readHashState();
+  if (!s) {
+    try { s = JSON.parse(store.get(FILTER_STATE_KEY) || 'null'); } catch { s = null; }
+  }
+  if (s && typeof s === 'object') applyFilterState(s);
+}
+function saveFilterState() {
+  store.set(FILTER_STATE_KEY, JSON.stringify({
+    selType, selClass, selToolCat, selLevel, selAffixes: [...selAffixes],
+    search: $('search').value, mineOnly, rentedOnly, columnSort,
+  }));
+  const p = new URLSearchParams();
+  if (selType) p.set('t', selType);
+  if (selClass) p.set('c', selClass);
+  if (selToolCat) p.set('k', selToolCat);
+  if (selLevel !== null) p.set('l', String(selLevel));
+  if (selAffixes.size) p.set('a', [...selAffixes].join(','));
+  const q = $('search').value.trim();
+  if (q) p.set('q', q);
+  if (columnSort) p.set('s', `${columnSort.key}:${columnSort.dir}`);
+  const hash = p.toString();
+  const url = location.pathname + location.search + (hash ? '#' + hash : '');
+  if (url !== location.pathname + location.search + location.hash) {
+    try { history.replaceState(null, '', url); } catch {}
+  }
+  $('shareBtn').style.display = hash ? 'inline' : 'none';
+}
+// Saved values that no longer fit (a level whose items are all gone, an affix that can't roll on
+// the type, a renamed type) are dropped, so the list is never empty behind filters you can't see.
+function validateFilterState() {
+  const cfg = hasOwn(TYPE_CONFIG, selType) ? TYPE_CONFIG[selType] : null;
+  if (!cfg) selType = null;
+  if (!cfg || !cfg.needsClass || !hasOwn(ARCHETYPES, selClass)) selClass = null;
+  if (!cfg || !cfg.isTools || !cfg.categories.includes(selToolCat)) selToolCat = null;
+  const cat = resolvedCategory();
+  if (selLevel !== null && itemsLoaded && (!cat || !items.some(i => itemMatchesFilters(i) && i.level === selLevel))) selLevel = null;
+  const pool = affixPoolFor(cat);
+  if (pool) [...selAffixes].forEach(a => { if (!pool.includes(a)) selAffixes.delete(a); });
+  else if (master || !cat) selAffixes.clear();
+  if (columnSort && !SORT_KEYS.includes(columnSort.key)) columnSort = null;
+}
+loadFilterState();
+
+// ---------------------------------------------------------------------------------------------
+// Filters
+// ---------------------------------------------------------------------------------------------
 function itemMatchesFilters(i) {
   if (!selType) return true;
   const cfg = TYPE_CONFIG[selType];
+  if (!cfg) return true;
   if (cfg.isTools) {
     if (!cfg.categories.includes(i.category)) return false;
     if (selToolCat && i.category !== selToolCat) return false;
@@ -682,52 +802,66 @@ function itemMatchesFilters(i) {
 }
 
 function resolvedCategory() {
-  if (!selType) return null;
+  if (!selType || !TYPE_CONFIG[selType]) return null;
   const cfg = TYPE_CONFIG[selType];
   if (cfg.isTools) return selToolCat;
   if (cfg.needsClass) return selClass ? cfg.archetypeCategory[selClass] : null;
   return cfg.categories[0];
 }
 
-const typeEl = document.getElementById('types');
-TYPES.forEach(t => {
-  const btn = document.createElement('button');
-  btn.className = 'pill' + (selType === t ? ' active' : '');
-  btn.textContent = t;
-  btn.onclick = () => {
-    const newType = selType === t ? null : t;
-    const prevNeedsClass = selType && TYPE_CONFIG[selType].needsClass;
-    const newNeedsClass = newType && TYPE_CONFIG[newType].needsClass;
-    selType = newType;
-    // Retain the Warrior/Ranger/Mage pick when switching between the 4 slots that all use
-    // it (Helmet/Bodyarmor/Gloves/Boots) - only clear it when leaving that group entirely.
-    if (!(prevNeedsClass && newNeedsClass)) selClass = null;
-    selToolCat = null; selLevel = null; selAffixes.clear();
-    currentPage = 1;
-    [...typeEl.children].forEach(b => b.classList.remove('active'));
-    if (selType) btn.classList.add('active');
-    buildClassWrap(); buildToolCatWrap(); buildLevels(); buildAffixes(); render();
-  };
-  typeEl.appendChild(btn);
-});
+// The category's affixes from the bot, [] for none, null while they haven't loaded yet.
+function affixPoolFor(cat) {
+  if (!cat) return null;
+  if (!master) return null;
+  return (master.affixPools && master.affixPools[cat]) || [];
+}
+
+function setPressed(btn, on) {
+  btn.classList.toggle('active', on);
+  btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+}
+
+const typeEl = $('types');
+function buildTypes() {
+  typeEl.innerHTML = '';
+  TYPES.forEach(t => {
+    const btn = document.createElement('button');
+    btn.className = 'pill';
+    btn.textContent = t;
+    setPressed(btn, selType === t);
+    btn.onclick = () => {
+      const newType = selType === t ? null : t;
+      const prevNeedsClass = selType && TYPE_CONFIG[selType].needsClass;
+      const newNeedsClass = newType && TYPE_CONFIG[newType].needsClass;
+      selType = newType;
+      // Keep the Warrior/Ranger/Mage pick when switching between the 4 slots that all use it.
+      if (!(prevNeedsClass && newNeedsClass)) selClass = null;
+      selToolCat = null; selLevel = null; selAffixes.clear();
+      currentPage = 1;
+      [...typeEl.children].forEach(b => setPressed(b, b === btn && !!selType));
+      buildClassWrap(); buildToolCatWrap(); buildLevels(); buildAffixes(); render();
+    };
+    typeEl.appendChild(btn);
+  });
+}
 
 function buildClassWrap() {
-  const wrap = document.getElementById('classWrap');
-  const classEl = document.getElementById('classes');
+  const wrap = $('classWrap');
+  const classEl = $('classes');
   classEl.innerHTML = '';
   const cfg = selType ? TYPE_CONFIG[selType] : null;
   if (!cfg || !cfg.needsClass) { wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
   ARCHETYPE_LIST.forEach(c => {
     const btn = document.createElement('button');
-    btn.className = 'pill small' + (selClass === c ? ' active' : '');
+    btn.className = 'pill small';
     btn.textContent = c;
+    setPressed(btn, selClass === c);
     btn.onclick = () => {
       selClass = selClass === c ? null : c;
       selLevel = null; selAffixes.clear();
       currentPage = 1;
-      [...classEl.children].forEach(b => b.classList.remove('active'));
-      if (selClass) btn.classList.add('active');
+      [...classEl.children].forEach(b => setPressed(b, b === btn && !!selClass));
       buildLevels(); buildAffixes(); render();
     };
     classEl.appendChild(btn);
@@ -735,22 +869,22 @@ function buildClassWrap() {
 }
 
 function buildToolCatWrap() {
-  const wrap = document.getElementById('toolCatWrap');
-  const tcEl = document.getElementById('toolCats');
+  const wrap = $('toolCatWrap');
+  const tcEl = $('toolCats');
   tcEl.innerHTML = '';
   const cfg = selType ? TYPE_CONFIG[selType] : null;
   if (!cfg || !cfg.isTools) { wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
   cfg.categories.forEach(cat => {
     const btn = document.createElement('button');
-    btn.className = 'pill small' + (selToolCat === cat ? ' active' : '');
+    btn.className = 'pill small';
     btn.textContent = cat;
+    setPressed(btn, selToolCat === cat);
     btn.onclick = () => {
       selToolCat = selToolCat === cat ? null : cat;
       selLevel = null; selAffixes.clear();
       currentPage = 1;
-      [...tcEl.children].forEach(b => b.classList.remove('active'));
-      if (selToolCat) btn.classList.add('active');
+      [...tcEl.children].forEach(b => setPressed(b, b === btn && !!selToolCat));
       buildLevels(); buildAffixes(); render();
     };
     tcEl.appendChild(btn);
@@ -763,16 +897,13 @@ function tierLabel(name, cat) {
 }
 
 function updateDetailWrapVisibility() {
-  const detailWrap = document.getElementById('detailWrap');
-  const levelWrap = document.getElementById('levelWrap');
-  const affixWrap = document.getElementById('affixWrap');
-  const showDetail = levelWrap.style.display !== 'none' || affixWrap.style.display !== 'none';
-  detailWrap.style.display = showDetail ? 'block' : 'none';
+  const showDetail = $('levelWrap').style.display !== 'none' || $('affixWrap').style.display !== 'none';
+  $('detailWrap').style.display = showDetail ? 'block' : 'none';
 }
 
 function buildLevels() {
-  const wrap = document.getElementById('levelWrap');
-  const levelEl = document.getElementById('levels');
+  const wrap = $('levelWrap');
+  const levelEl = $('levels');
   levelEl.innerHTML = '';
   const cat = resolvedCategory();
   if (!cat) { wrap.style.display = 'none'; updateDetailWrapVisibility(); return; }
@@ -780,18 +911,19 @@ function buildLevels() {
   items.filter(itemMatchesFilters).forEach(i => {
     if (!seen.has(i.level)) seen.set(i.level, tierLabel(i.name, cat));
   });
+  if (itemsLoaded && selLevel !== null && !seen.has(selLevel)) selLevel = null;  // its items are gone
   const tiers = [...seen.entries()].sort((a, b) => b[0] - a[0]);
   if (tiers.length < 2) { wrap.style.display = 'none'; updateDetailWrapVisibility(); return; }
   wrap.style.display = 'block';
   tiers.forEach(([lvl, label]) => {
     const btn = document.createElement('button');
-    btn.className = 'pill small' + (selLevel === lvl ? ' active' : '');
+    btn.className = 'pill small';
     btn.textContent = label;
+    setPressed(btn, selLevel === lvl);
     btn.onclick = () => {
       selLevel = selLevel === lvl ? null : lvl;
       currentPage = 1;
-      [...levelEl.children].forEach(b => b.classList.remove('active'));
-      if (selLevel !== null) btn.classList.add('active');
+      [...levelEl.children].forEach(b => setPressed(b, b === btn && selLevel !== null));
       render();
     };
     levelEl.appendChild(btn);
@@ -800,20 +932,21 @@ function buildLevels() {
 }
 
 function buildAffixes() {
-  const wrap = document.getElementById('affixWrap');
-  const affixEl = document.getElementById('affixes');
+  const wrap = $('affixWrap');
+  const affixEl = $('affixes');
   affixEl.innerHTML = '';
-  const cat = resolvedCategory();
-  const pool = affixPools[cat] || [];
-  if (!cat || pool.length === 0) { wrap.style.display = 'none'; updateDetailWrapVisibility(); return; }
+  const pool = affixPoolFor(resolvedCategory());
+  if (!pool || pool.length === 0) { wrap.style.display = 'none'; updateDetailWrapVisibility(); return; }
   wrap.style.display = 'block';
   pool.forEach(a => {
     const btn = document.createElement('button');
-    btn.className = 'pill small' + (selAffixes.has(a) ? ' active' : '');
+    btn.className = 'pill small';
     btn.textContent = a;
+    setPressed(btn, selAffixes.has(a));
     btn.onclick = () => {
-      if (selAffixes.has(a)) { selAffixes.delete(a); btn.classList.remove('active'); }
-      else if (selAffixes.size < 4) { selAffixes.add(a); btn.classList.add('active'); }
+      if (selAffixes.has(a)) selAffixes.delete(a);
+      else if (selAffixes.size < 4) selAffixes.add(a);
+      setPressed(btn, selAffixes.has(a));
       currentPage = 1;
       render();
     };
@@ -822,738 +955,116 @@ function buildAffixes() {
   updateDetailWrapVisibility();
 }
 
-document.getElementById('resetBtn').onclick = () => {
+function rebuildFilterUi() {
+  buildTypes(); buildClassWrap(); buildToolCatWrap(); buildLevels(); buildAffixes();
+  syncMineButtons();
+}
+
+$('resetBtn').onclick = () => {
   selType = null; selClass = null; selToolCat = null; selLevel = null; selAffixes.clear();
   mineOnly = false; rentedOnly = false; columnSort = null;
-  document.getElementById('mineBtn').classList.remove('active');
-  document.getElementById('rentedOnlyBtn').classList.remove('active');
-  syncRentedButtonLayout();
-  document.getElementById('search').value = '';
+  $('search').value = '';
   currentPage = 1;
-  [...typeEl.children].forEach(b => b.classList.remove('active'));
-  buildClassWrap(); buildToolCatWrap(); buildLevels(); buildAffixes(); render();
+  rebuildFilterUi(); render();
 };
-document.getElementById('emptyResetBtn').onclick = () => document.getElementById('resetBtn').click();
-document.getElementById('search').addEventListener('input', debouncedSearchRender);
+$('emptyResetBtn').onclick = () => $('resetBtn').click();
+const debouncedSearchRender = debounce(() => { currentPage = 1; render(); }, 200);
+$('search').addEventListener('input', debouncedSearchRender);
 
-// Column sorting: click a sortable header to sort by it ascending, click again for
-// descending, click a different header to switch columns (always starts ascending).
-function columnSortValue(item, key) {
-  switch (key) {
-    case 'name': return item.name || '';
-    case 'category': return item.category || '';
-    case 'class': return abbreviateClasses(item.classes) || '';
-    case 'owner': return item.owner_name || '';
-    case 'status': return item.status || '';
-    default: return '';
-  }
-}
-document.querySelectorAll('thead th.sortable').forEach(th => {
-  th.addEventListener('click', () => {
-    const key = th.dataset.sort;
-    if (!columnSort || columnSort.key !== key) {
-      columnSort = { key, dir: 'asc' };
-    } else if (columnSort.dir === 'asc') {
-      columnSort.dir = 'desc';
-    } else {
-      columnSort = null;
-    }
-    currentPage = 1;
-    render();
-  });
+window.addEventListener('hashchange', () => {
+  const s = readHashState();
+  if (!s) return;
+  applyFilterState(s);
+  validateFilterState();
+  currentPage = 1;
+  rebuildFilterUi(); render();
 });
-function updateSortArrows() {
-  document.querySelectorAll('thead th.sortable').forEach(th => {
-    const arrow = th.querySelector('.sort-arrow');
-    if (columnSort && columnSort.key === th.dataset.sort) {
-      arrow.textContent = columnSort.dir === 'asc' ? '\u25B2' : '\u25BC';
-      th.setAttribute('aria-sort', columnSort.dir === 'asc' ? 'ascending' : 'descending');
-    } else {
-      arrow.textContent = '';
-      th.setAttribute('aria-sort', 'none');
-    }
-  });
-}
 
-function updateActiveFilterBadge() {
-  let count = 0;
-  if (document.getElementById('search').value.trim()) count++;
-  if (selType) count++;
-  if (selClass) count++;
-  if (selToolCat) count++;
-  if (selLevel !== null) count++;
-  count += selAffixes.size;
-  if (mineOnly) count++;
-  if (rentedOnly) count++;
-  const badge = document.getElementById('activeFilterBadge');
-  if (count > 0) {
-    badge.textContent = String(count);
-    badge.title = `${count} active filter${count === 1 ? '' : 's'}`;
-    badge.style.display = 'block';
-  } else {
-    badge.style.display = 'none';
+$('shareBtn').onclick = async () => {
+  const url = location.href;
+  let copied = false;
+  try { await navigator.clipboard.writeText(url); copied = true; } catch {}
+  if (!copied) {
+    const box = document.createElement('textarea');
+    box.value = url; box.setAttribute('readonly', ''); box.style.position = 'fixed'; box.style.opacity = '0';
+    document.body.appendChild(box); box.select();
+    try { copied = document.execCommand('copy'); } catch {}
+    box.remove();
   }
-}
-
-function handleAuthRedirect() {
-  const params = new URLSearchParams(window.location.search);
-  const token = params.get('token');
-  const authErr = params.get('auth_error');
-  if (token) { localStorage.setItem('sf_token', token); params.delete('token'); }
-  if (authErr) {
-    const messages = {
-      not_a_member: "You are not a member of Sleeping Forest.",
-      missing_code: 'Discord login was cancelled or failed.',
-      server_error: 'Something went wrong logging you in - try again.',
-    };
-    const el = document.getElementById('authError');
-    el.textContent = messages[authErr] || 'Login failed - try again.';
-    el.style.display = 'block';
-    params.delete('auth_error');
-  }
-  const qs = params.toString();
-  history.replaceState({}, '', window.location.pathname + (qs ? '?' + qs : ''));
-}
-
-async function loadUser() {
-  const token = localStorage.getItem('sf_token');
-  if (!token) { currentUser = null; renderAuthBox(); return; }
-  try {
-    const r = await fetch(`${API_BASE}/api/me`, { headers: { Authorization: `Bearer ${token}` } });
-    if (!r.ok) throw new Error();
-    currentUser = await r.json();
-  } catch {
-    localStorage.removeItem('sf_token');
-    currentUser = null;
-  }
-  renderAuthBox();
-}
-
-// Keeps rentedOnlyBtn's visibility AND the row's mobile grid layout in sync with mineOnly,
-// from a single place - the desktop position (right after search) and the mobile grid
-// (My Items/Add Item always fixed; Reset alone spans full width until Rented Only joins it)
-// both key off the exact same condition, so this stops the two from ever drifting apart.
-function syncRentedButtonLayout() {
-  document.getElementById('rentedOnlyBtn').style.display = mineOnly ? 'inline-block' : 'none';
-  document.querySelector('.row').classList.toggle('rented-active', mineOnly);
-}
-
-function renderAuthBox() {
-  const box = document.getElementById('authBox');
-  const mineBtn = document.getElementById('mineBtn');
-  const rentedBtn = document.getElementById('rentedOnlyBtn');
-  const addBtn = document.getElementById('addBtn');
-  const removeHint = document.getElementById('removeHint');
-  const linkHint = document.getElementById('linkHint');
-  if (currentUser) {
-    const avatarUrl = currentUser.avatar
-      ? `https://cdn.discordapp.com/avatars/${currentUser.id}/${currentUser.avatar}.png?size=64`
-      : 'https://cdn.discordapp.com/embed/avatars/0.png';
-    const displayName = currentUser.ingame_name || currentUser.username;
-    box.innerHTML = `<img src="${avatarUrl}" alt="" loading="lazy"><span class="uname">${escapeHtml(displayName)}</span><button class="link-muted" id="logoutBtn">Log out</button>`;
-    document.getElementById('logoutBtn').onclick = () => {
-      localStorage.removeItem('sf_token');
-      currentUser = null; mineOnly = false; rentedOnly = false;
-      mineBtn.classList.remove('active');
-      rentedBtn.classList.remove('active');
-      syncRentedButtonLayout();
-      renderAuthBox(); render();
-    };
-    if (currentUser.linked) {
-      mineBtn.style.display = 'inline-block';
-      addBtn.style.display = 'inline-block';
-      removeHint.style.display = 'block';
-      linkHint.style.display = 'none';
-      mineBtn.classList.toggle('active', mineOnly);
-      syncRentedButtonLayout();
-      rentedBtn.classList.toggle('active', rentedOnly);
-    } else {
-      mineBtn.style.display = 'none';
-      mineOnly = false;
-      mineBtn.classList.remove('active');
-      rentedOnly = false;
-      syncRentedButtonLayout();
-      rentedBtn.classList.remove('active');
-      addBtn.style.display = 'none';
-      removeHint.style.display = 'none';
-      linkHint.textContent = 'Run !link <ingame_name> in Discord to add or remove items.';
-      linkHint.style.display = 'block';
-    }
-  } else {
-    box.innerHTML = `<button class="btn-discord" id="loginBtn">Log in with Discord</button>`;
-    document.getElementById('loginBtn').onclick = () => { window.location.href = `${API_BASE}/auth/discord/login`; };
-    mineBtn.style.display = 'none';
-    addBtn.style.display = 'none';
-    removeHint.style.display = 'none';
-    linkHint.style.display = 'none';
-    mineOnly = false;
-    rentedOnly = false;
-    syncRentedButtonLayout();
-  }
-}
-
-// Rented Only sits right after the search box on desktop (so the search box absorbs its
-// width and My Items/Add Item/Reset never shift), and joins Reset on the bottom row on
-// mobile (Reset alone spans full width until Rented Only appears, then they split evenly).
-document.getElementById('mineBtn').onclick = () => {
-  mineOnly = !mineOnly;
-  document.getElementById('mineBtn').classList.toggle('active', mineOnly);
-  syncRentedButtonLayout();
-  if (!mineOnly) { rentedOnly = false; document.getElementById('rentedOnlyBtn').classList.remove('active'); }
-  currentPage = 1;
-  render();
-};
-document.getElementById('rentedOnlyBtn').onclick = () => {
-  rentedOnly = !rentedOnly;
-  document.getElementById('rentedOnlyBtn').classList.toggle('active', rentedOnly);
-  currentPage = 1;
-  render();
+  showToast(copied ? 'Link copied. Paste it in Discord to share this view.' : 'Copy the link from the address bar to share this view.');
 };
 
-const PLACEHOLDER_ICON = "data:image/svg+xml;utf8," + encodeURIComponent(
-  "<svg xmlns='http://www.w3.org/2000/svg' width='60' height='60'><rect width='60' height='60' rx='8' fill='#161922'/><path d='M20 40 L30 20 L40 40 Z' fill='#2a2e3a'/></svg>"
-);
-
-const TOOL_FOLDERS_ICON = {
-  Pickaxe: "Pickaxes", Axe: "Axes", Trap: "Traps",
-  "Fishing Rod": "Fishingrods", Basket: "Baskets", Pouch: "Pouches",
-};
-const TOOL_CATEGORIES = new Set(Object.keys(TOOL_FOLDERS_ICON));
-
-// Common is only a real rarity for Tools - weapons/armor never drop as Common in-game.
-// Rebuilds the Rarity <select> options based on whichever item is currently typed/pasted,
-// preserving the current selection if it's still a valid option, else defaulting to the first.
-function buildRarityOptions(master) {
-  const raritySel = document.getElementById('modalRarity');
-  const currentValue = raritySel.value;
-  const entry = modalItemMap[resolveItemName(document.getElementById('modalItemInput').value)];
-  const isTool = entry && TOOL_CATEGORIES.has(entry.category);
-  const options = isTool ? master.rarities : master.rarities.filter(r => r !== 'Common');
-  raritySel.innerHTML = '';
-  options.forEach(r => {
-    const opt = document.createElement('option');
-    opt.value = r; opt.textContent = r;
-    raritySel.appendChild(opt);
-  });
-  raritySel.value = options.includes(currentValue) ? currentValue : options[0];
-}
-// Tools don't have a Combat Level requirement - they gate on their matching gathering skill instead.
-const TOOL_SKILL_LABEL = {
-  Pickaxe: "Mining", Axe: "Woodcutting", Trap: "Tracking",
-  "Fishing Rod": "Fishing", Basket: "Gathering", Pouch: "Herbalism",
-};
-const LEATHER_TOP3_TIER = { Shadowhide: "shadow", Dragonhide: "dragon", Abyssal: "abyssal" };
-const ENDGAME_TIER_NUM = { Cursed: 1, Abyssal: 2, Corrupted: 3 };
-const ICON_FULL_URL_OVERRIDES = { "Abyssal Pouch": "https://cdn.degenidle.com/Leatherworking/abyssalleather.png" };
-const ICON_SLUG_OVERRIDES = { "Leather Bow": "t1leatherworkingbow", "Wool Hat": "t1tailoringhat" };
-const ICON_TYPO_FIX = { "abyssalleatherbodyarmor": "abyysalleatherbodyarmor" }; 
-
-function iconSlugify(s) { return s.replace(/\s+/g, '').toLowerCase(); }
-
-function iconArchetype(classes) {
-  if (!classes) return null;
-  if (classes.includes('All')) return 'Accessory';
-  if (classes.includes('Guardian') || classes.includes('Berserker')) return 'Warrior';
-  if (classes.includes('Sniper') || classes.includes('Assassin')) return 'Ranger';
-  if (classes.includes('Archmage') || classes.includes('Spellblade')) return 'Mage';
-  return null;
-}
-
-// Shadowhide/Dragonhide/Abyssal drop "Leather" in the display name, but the asset filename keeps
-// it (and drops "hide") - e.g. "Dragonhide Pouch" -> dragonleatherpouch.png. Applies to every
-// Leatherworking category that has this quirk: Hat/Bodyarmor/Gloves/Boots AND Pouch.
-function leatherTop3Slug(name, category) {
-  const top3 = Object.keys(LEATHER_TOP3_TIER).find(t => name.startsWith(t));
-  if (!top3) return null;
-  const slug = iconSlugify(`${LEATHER_TOP3_TIER[top3]}leather${category}`);
-  return ICON_TYPO_FIX[slug] || slug;
-}
-
-function getIconUrl(item) {
-  if (!item) return null;
-  const { name, category, classes } = item;
-
-  // Full-URL overrides for items that don't follow any folder/slug pattern at all.
-  // Abyssal Pouch: given as "https://cdn.degenidle.com/Leatherworking/abyssalleather.png" -
-  // note this filename literally says "leather" not "pouch" and sits directly under
-  // Leatherworking/ with no Armor or Tools subfolder, which is unlike every other Pouch tier.
-  // Worth a second look if it still looks wrong in the card - it may be reusing the raw
-  // "Abyssal Leather" material's icon rather than having a dedicated Pouch icon.
-  if (ICON_FULL_URL_OVERRIDES[name]) return ICON_FULL_URL_OVERRIDES[name];
-
-  // Endgame gear (Cursed/Corrupted/Abyssal Bastion/Invoker/Slayer) uses a numbered tier filename
-  // instead of the tier word - CONFIRMED for Bastion/Forging (t1/t2forgingshield, t1forgingbodyarmor).
-  // Invoker/Slayer below extrapolate the same pattern and are UNVERIFIED - re-run check_icons.py
-  // after adding these items and report anything that still 404s.
-  const endgameMatch = name.match(/^(Cursed|Corrupted|Abyssal) (Bastion|Invoker|Slayer) (.+)$/);
-  if (endgameMatch) {
-    const tierNum = ENDGAME_TIER_NUM[endgameMatch[1]];
-    const suffix = endgameMatch[2];
-    if (suffix === 'Bastion') {
-      const folder = (category === 'Sword' || category === 'Shield') ? 'Weapons' : 'Armor';
-      return `https://cdn.degenidle.com/Blacksmithing/${folder}/t${tierNum}forging${iconSlugify(category)}.png`;
-    }
-    if (suffix === 'Invoker') {
-      if (category === 'Staff') {
-        return `https://cdn.degenidle.com/Crafting/Staff/t${tierNum}tailoring${iconSlugify(category)}.png`;
-      }
-      return `https://cdn.degenidle.com/Tailoring/Armor/t${tierNum}tailoring${iconSlugify(category)}.png`;
-    }
-    if (suffix === 'Slayer') {
-      if (category === 'Bow') {
-        return `https://cdn.degenidle.com/Crafting/Bow/t${tierNum}leatherworking${iconSlugify(category)}.png`;
-      }
-      return `https://cdn.degenidle.com/Leatherworking/Armor/t${tierNum}leatherworking${iconSlugify(category === 'Hat' ? 'hood' : category)}.png`;
+// ---------------------------------------------------------------------------------------------
+// Search: every word typed must match the item's name, rarity, category, class, owner, borrower
+// or an affix ("mythic ring", "bloss gloves", "nyxium cdmg"). Affix short names work (hp, cdmg,
+// hoc). Typos are forgiven for words of 5+ letters only: a 3-letter word like "hat" used to
+// match "Hit" in every Health on Hit item.
+// ---------------------------------------------------------------------------------------------
+function levenshtein(a, b) {
+  const dp = [];
+  for (let i = 0; i <= a.length; i++) dp.push([i]);
+  for (let j = 0; j <= b.length; j++) dp[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
     }
   }
-
-  if (category === 'Ring' || category === 'Amulet') {
-    return `https://cdn.degenidle.com/Crafting/Accessories/${iconSlugify(name)}.png`;
-  }
-  if (TOOL_FOLDERS_ICON[category]) {
-    const slug = leatherTop3Slug(name, category) || iconSlugify(name);
-    return `https://cdn.degenidle.com/Crafting/Tools/${TOOL_FOLDERS_ICON[category]}/${slug}.png`;
-  }
-  if (category === 'Bow') {
-    const slug = ICON_SLUG_OVERRIDES[name] || iconSlugify(name);
-    return `https://cdn.degenidle.com/Crafting/Bow/${slug}.png`;
-  }
-  if (category === 'Staff') {
-    return `https://cdn.degenidle.com/Crafting/Staff/${iconSlugify(name)}.png`;
-  }
-  const arch = iconArchetype(classes);
-  if (arch === 'Warrior') {
-    const folder = (category === 'Sword' || category === 'Shield') ? 'Weapons' : 'Armor';
-    return `https://cdn.degenidle.com/Blacksmithing/${folder}/${iconSlugify(name)}.png`;
-  }
-  if (arch === 'Mage') {
-    const n = /^Mystic\b/.test(name) ? name.replace(/^Mystic/, 'Celestial') : name;
-    if (category === 'Hat') {
-      // Hat assets use a "wizardhat" suffix instead of the plain category word, except tier 1
-      // (Wool) which has its own irregular name, already caught by ICON_SLUG_OVERRIDES above.
-      const tierWord = n.replace(/\s*Hat$/, '');
-      const slug = ICON_SLUG_OVERRIDES[name] || iconSlugify(`${tierWord}wizardhat`);
-      return `https://cdn.degenidle.com/Tailoring/Armor/${slug}.png`;
-    }
-    return `https://cdn.degenidle.com/Tailoring/Armor/${iconSlugify(n)}.png`;
-  }
-  if (arch === 'Ranger') {
-    const slug = leatherTop3Slug(name, category) || iconSlugify(name);
-    return `https://cdn.degenidle.com/Leatherworking/Armor/${slug}.png`;
-  }
-  return null;
+  return dp[a.length][b.length];
 }
-
-const PROFESSION_LABEL = { Warrior: 'Forging', Ranger: 'Leatherworking', Mage: 'Tailoring', Accessory: 'Crafting' };
-
-document.getElementById('pcIcon').onerror = function () { this.onerror = null; this.src = PLACEHOLDER_ICON; };
-
-let itemMasterCache = null;
-let modalSelectedAffixes = new Set();
-let modalItemMap = {};
-
-// Resolves whatever's typed to the exact-cased item name, case-insensitively - so "nyxium helmet"
-// still matches "Nyxium Helmet" even if it wasn't picked from the datalist suggestions.
-function resolveItemName(text) {
-  if (!text) return null;
-  if (modalItemMap[text]) return text;
+function searchWords() {
+  return $('search').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+}
+function abbreviationFor(word) {
+  const abbr = master && master.affixAbbreviations;
+  return abbr && Object.prototype.hasOwnProperty.call(abbr, word) ? abbr[word] : null;
+}
+function wordMatches(word, fields, affixesLower) {
+  const full = abbreviationFor(word);
+  if (full && affixesLower.includes(full.toLowerCase())) return true;
+  if (fields.some(f => f.includes(word))) return true;
+  if (word.length < 5) return false;
+  const limit = word.length >= 8 ? 2 : 1;
+  return fields.some(f => f.split(/\s+/).some(w => Math.abs(w.length - word.length) <= limit && levenshtein(w, word) <= limit));
+}
+function matchesSearch(i, words) {
+  if (!words.length) return true;
+  const affixesLower = (i.affixes || []).map(a => a.toLowerCase());
+  const fields = [i.name, i.rarity, i.category, i.owner_name, i.borrower_name, abbreviateClasses(i.classes)]
+    .filter(Boolean).map(s => String(s).toLowerCase()).concat(affixesLower);
+  return words.every(w => wordMatches(w, fields, affixesLower));
+}
+// Marks the parts of text that match a search word (exact substrings; an affix matched through
+// its short name is marked whole). Everything is escaped.
+function highlightWords(text, words) {
+  text = text || '';
+  if (!words.length) return escapeHtml(text);
   const lower = text.toLowerCase();
-  return Object.keys(modalItemMap).find(name => name.toLowerCase() === lower) || null;
-}
-
-async function ensureItemMaster() {
-  if (itemMasterCache) return itemMasterCache;
-  const r = await fetch(`${API_BASE}/api/item-master`);
-  itemMasterCache = await r.json();
-  return itemMasterCache;
-}
-
-document.getElementById('addBtn').onclick = async () => {
-  if (!currentUser) { window.location.href = `${API_BASE}/auth/discord/login`; return; }
-  await openAddModal();
-};
-
-async function openAddModal() {
-  hideDeleteConfirm();
-  modalPreviouslyFocusedEl = document.activeElement;
-  const master = await ensureItemMaster();
-  modalItemMap = {};
-  const list = document.getElementById('modalItemList');
-  list.innerHTML = '';
-  // Regular gear (level 1-80) sorted high-to-low first, endgame tiers (85+) pushed to the
-  // bottom instead of interleaving by raw level - they're rare enough that burying common
-  // items under them in the suggestion list isn't worth it.
-  const sortedItems = [...master.items].sort((a, b) => {
-    const aEndgame = a.level > 80, bEndgame = b.level > 80;
-    if (aEndgame !== bEndgame) return aEndgame ? 1 : -1;
-    return b.level - a.level;
-  });
-  sortedItems.forEach(it => {
-    modalItemMap[it.name] = it;
-    const opt = document.createElement('option');
-    opt.value = it.name;
-    list.appendChild(opt);
-  });
-  document.getElementById('modalItemInput').value = '';
-  buildRarityOptions(master);
-  
-  // Reset UI back to manual form
-  document.querySelector('.modal').classList.remove('card-mode');
-  document.getElementById('defaultUiWrap').style.display = 'block';
-  document.getElementById('previewCard').style.display = 'none';
-
-  document.getElementById('modalPasteBox').value = '';
-  document.getElementById('modalError').style.display = 'none';
-  document.getElementById('cardError').style.display = 'none';
-  document.getElementById('pcDuplicateHint').style.display = 'none';
-  modalSelectedAffixes.clear();
-  
-  buildModalAffixes(master);
-  document.getElementById('addModalBg').style.display = 'flex';
-  document.getElementById('modalPasteBox').focus();
-}
-
-function updateSubmitState() {
-  const text = document.getElementById('modalItemInput').value;
-  const valid = !!resolveItemName(text);
-  document.getElementById('modalSubmit').disabled = !valid;
-  const bigBtn = document.getElementById('pcBigAddBtn');
-  if (bigBtn) bigBtn.disabled = !valid;
-  // Only nag once they've actually typed something that doesn't match - not on the empty default state.
-  document.getElementById('modalItemHint').style.display = (text.trim() && !valid) ? 'block' : 'none';
-}
-
-function buildModalAffixes(master) {
-  const wrap = document.getElementById('modalAffixWrap');
-  const affixEl = document.getElementById('modalAffixes');
-  affixEl.innerHTML = '';
-  const entry = modalItemMap[resolveItemName(document.getElementById('modalItemInput').value)];
-  const rarity = document.getElementById('modalRarity').value;
-  const pool = entry ? (master.affixPools[entry.category] || []) : [];
-  updateSubmitState();
-  if (!entry || pool.length === 0) { wrap.style.display = 'none'; return; }
-  wrap.style.display = 'block';
-  const cap = master.rarityAffixCap[rarity] || 4;
-  pool.forEach(a => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'pill small';
-    btn.textContent = a;
-    if (modalSelectedAffixes.has(a)) btn.classList.add('active');
-    btn.onclick = () => {
-      if (modalSelectedAffixes.has(a)) { modalSelectedAffixes.delete(a); btn.classList.remove('active'); }
-      else if (modalSelectedAffixes.size < cap) { modalSelectedAffixes.add(a); btn.classList.add('active'); }
-    };
-    affixEl.appendChild(btn);
-  });
-}
-
-function extractStatPairs(rawLines, startIdx, endIdx) {
-  const pairs = [];
-  let i = startIdx;
-  while (i < endIdx) {
-    const line = rawLines[i];
-    // This allows percentages to be attached to the number properly, enabling perfectly aligned spacing on the row.
-    const embedded = line.match(/^(.*?)\s*([+-]?\d+(?:\.\d+)?%?)\s*$/);
-    
-    if (embedded && embedded[1].trim()) {
-      pairs.push({ name: embedded[1].trim(), value: embedded[2] });
-      i++;
-    } else if (i + 1 < endIdx && /^[+-]?\d+(?:\.\d+)?%?$/.test(rawLines[i + 1])) {
-      pairs.push({ name: line, value: rawLines[i + 1] });
-      i += 2;
-    } else {
-      pairs.push({ name: line, value: null });
-      i++;
-    }
+  if (words.some(w => { const full = abbreviationFor(w); return full && full.toLowerCase() === lower; })) {
+    return `<mark class="search-highlight">${escapeHtml(text)}</mark>`;
   }
-  return pairs;
-}
-
-function parseItemPaste(text, master) {
-  const rawLines = text.split('\n').map(l => l.trim()).filter(Boolean);
-  if (!rawLines.length) return null;
-
-  let rarity = null;
-  for (const line of rawLines) {
-    const found = master.rarities.find(r => new RegExp(`\\b${r}\\b`, 'i').test(line));
-    if (found) { rarity = found; break; }
-  }
-
-  let itemName = null;
-  const candidates = [];
-  if (rawLines[0]) {
-    candidates.push(rawLines[0]);
-    candidates.push(rawLines[0].replace(/Lv\.?\s*\d+\s*$/i, '').trim());
-  }
-  if (rawLines[1]) candidates.push(rawLines[1]);
-  for (const c of candidates) {
-    const foundName = Object.keys(modalItemMap).find(name => name.toLowerCase() === c.toLowerCase());
-    if (foundName) { itemName = foundName; break; }
-  }
-
-  const effIdx = rawLines.findIndex(l => /^effects$/i.test(l));
-  const affixIdx = rawLines.findIndex(l => /^affixes$/i.test(l));
-  const compareIdx = rawLines.findIndex(l => /^compare\b/i.test(l));
-
-  let effects = [];
-  if (effIdx !== -1) {
-    const end = affixIdx !== -1 ? affixIdx : (compareIdx !== -1 ? compareIdx : rawLines.length);
-    effects = extractStatPairs(rawLines, effIdx + 1, end);
-  }
-
-  const affixNames = [];
-  const affixValues = {};
-  if (affixIdx !== -1) {
-    const end = compareIdx !== -1 ? compareIdx : rawLines.length;
-    extractStatPairs(rawLines, affixIdx + 1, end).forEach(p => {
-      affixNames.push(p.name);
-      if (p.value) affixValues[p.name] = p.value;
-    });
-  }
-
-  return { rarity, itemName, affixNames, affixValues, effects };
-}
-
-async function handlePastedStats(text) {
-  const master = await ensureItemMaster();
-  const parsed = parseItemPaste(text, master);
-  if (!parsed || !parsed.itemName) return false;
-  
-  // Safely seed the background form values so our submission triggers seamlessly
-  document.getElementById('modalItemInput').value = parsed.itemName;
-  buildRarityOptions(master);
-  // Real in-game text omits the rarity word entirely for Common items - if nothing matched
-  // during parsing, that IS the signal it's Common (only valid for Tools, which is exactly
-  // what buildRarityOptions just made available above).
-  document.getElementById('modalRarity').value = parsed.rarity || 'Common';
-  updateSubmitState();
-  
-  const entry = modalItemMap[parsed.itemName];
-  
-  // Transform to Card view 
-  document.getElementById('defaultUiWrap').style.display = 'none';
-  document.querySelector('.modal').classList.add('card-mode');
-  document.getElementById('previewCard').style.display = 'block';
-  
-  const borderColor = rarityColorVar(parsed.rarity || 'Common');
-  document.getElementById('pcIcon').src = getIconUrl(entry) || PLACEHOLDER_ICON;
-  document.getElementById('pcIcon').style.borderColor = borderColor;
-  document.getElementById('pcLv').textContent = `Lv.${entry.level}`;
-  document.getElementById('pcName').textContent = entry.name;
-  document.getElementById('pcName').style.color = borderColor;
-
-  const arch = iconArchetype(entry.classes) || 'Accessory';
-  const profession = PROFESSION_LABEL[arch] || 'Crafting';
-  document.getElementById('pcSubtitle').textContent = `${parsed.rarity || 'Common'} ${entry.category} \u00B7 ${profession} Lv. ${entry.level}`;
-  document.getElementById('pcLevelLabel').textContent = (TOOL_SKILL_LABEL[entry.category] || 'Combat') + ' Level';
-  document.getElementById('pcLevel').textContent = entry.level;
-
-  if (entry.classes && entry.classes.length) {
-    document.getElementById('pcClassRow').style.display = 'flex';
-    document.getElementById('pcClassText').textContent = abbreviateClasses(entry.classes);
-  } else {
-    document.getElementById('pcClassRow').style.display = 'none';
-  }
-
-  const effSection = document.getElementById('pcEffectsSection');
-  const effEl = document.getElementById('pcEffects');
-  if (parsed.effects && parsed.effects.length) {
-    effEl.innerHTML = '';
-    parsed.effects.forEach(p => {
-      const row = document.createElement('div');
-      row.className = 'pc-row';
-      const val = p.value ? '+' + p.value.replace(/^\+/, '') : '';
-      row.innerHTML = `<span>${escapeHtml(p.name)}</span><span>${escapeHtml(val)}</span>`;
-      effEl.appendChild(row);
-    });
-    effSection.style.display = 'block';
-  } else {
-    effSection.style.display = 'none';
-  }
-
-  const affSection = document.getElementById('pcAffixesSection');
-  const affEl = document.getElementById('pcAffixes');
-  if (parsed.affixNames && parsed.affixNames.length) {
-    affEl.innerHTML = '';
-    parsed.affixNames.forEach(name => {
-      const row = document.createElement('div');
-      row.className = 'pc-row';
-      const raw = parsed.affixValues[name];
-      const val = raw ? '+' + raw.replace(/^\+/, '') : '';
-      row.innerHTML = `<span>${escapeHtml(name)}</span><span>${escapeHtml(val)}</span>`;
-      affEl.appendChild(row);
-    });
-    affSection.style.display = 'block';
-  } else {
-    affSection.style.display = 'none';
-  }
-
-  modalSelectedAffixes.clear();
-  const pool = master.affixPools[entry.category] || [];
-
-  // Whichever content section ends up visually last should not draw its own border-bottom -
-  // the footer's single full-width line right above the button is the one true divider there.
-  // Every section before that keeps its own border-bottom as the normal between-sections line.
-  const reqSection = document.getElementById('pcRequirementsSection');
-  const visibleSections = [reqSection];
-  if (effSection.style.display !== 'none') visibleSections.push(effSection);
-  if (affSection.style.display !== 'none') visibleSections.push(affSection);
-  visibleSections.forEach((el, i) => {
-    el.style.borderBottom = (i === visibleSections.length - 1) ? 'none' : '1px solid #2a2e3a';
-  });
-
-  parsed.affixNames.forEach(raw => {
-    const match = pool.find(a => a.toLowerCase() === raw.toLowerCase());
-    if (match) modalSelectedAffixes.add(match);
-  });
-
-  // Small, non-intrusive reminder if you've personally already added the exact same item -
-  // same name, rarity, and affix set (order doesn't matter). Doesn't block anything, just a nudge.
-  const dupeHint = document.getElementById('pcDuplicateHint');
-  if (currentUser) {
-    const targetAffixes = [...modalSelectedAffixes].sort().join('|');
-    const dupeCount = items.filter(i =>
-      i.owner_id === currentUser.id &&
-      i.name === entry.name &&
-      i.rarity === (parsed.rarity || 'Common') &&
-      [...(i.affixes || [])].sort().join('|') === targetAffixes
-    ).length;
-    if (dupeCount > 0) {
-      dupeHint.textContent = `${dupeCount} duplicate${dupeCount > 1 ? 's' : ''} found`;
-      dupeHint.style.display = 'block';
-    } else {
-      dupeHint.style.display = 'none';
-    }
-  } else {
-    dupeHint.style.display = 'none';
-  }
-
-  return true;
-}
-
-document.getElementById('modalPasteBox').addEventListener('input', async () => {
-  const box = document.getElementById('modalPasteBox');
-  const text = box.value;
-  await handlePastedStats(text);
-  box.value = ''; 
-});
-
-document.getElementById('modalPasteBox').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    document.getElementById('modalSubmit').focus();
-  }
-});
-
-window.addEventListener('paste', async (e) => {
-  const activeTag = document.activeElement ? document.activeElement.tagName : '';
-  if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
-  if (!currentUser || !currentUser.linked) return;
-  const text = (e.clipboardData || window.clipboardData).getData('text');
-  if (!text || !text.trim()) return;
-  e.preventDefault();
-  if (document.getElementById('addModalBg').style.display === 'none') {
-    await openAddModal();
-  }
-  await handlePastedStats(text);
-});
-
-document.getElementById('modalItemInput').addEventListener('input', () => {
-  modalSelectedAffixes.clear();
-  ensureItemMaster().then(master => {
-    buildRarityOptions(master);
-    buildModalAffixes(master);
-  });
-});
-
-document.getElementById('modalRarity').addEventListener('change', () => {
-  modalSelectedAffixes.clear();
-  ensureItemMaster().then(buildModalAffixes);
-});
-
-let modalPreviouslyFocusedEl = null;
-function getFocusableModalElements() {
-  const container = document.getElementById('modalContainer');
-  const all = container.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
-  return [...all].filter(el => el.offsetParent !== null && !el.disabled);
-}
-function trapModalFocus(e) {
-  if (e.key !== 'Tab') return;
-  const focusable = getFocusableModalElements();
-  if (!focusable.length) return;
-  const first = focusable[0];
-  const last = focusable[focusable.length - 1];
-  if (e.shiftKey && document.activeElement === first) {
-    e.preventDefault();
-    last.focus();
-  } else if (!e.shiftKey && document.activeElement === last) {
-    e.preventDefault();
-    first.focus();
-  }
-}
-document.getElementById('addModalBg').addEventListener('keydown', trapModalFocus);
-
-function closeAddModal() {
-  document.getElementById('addModalBg').style.display = 'none';
-  if (modalPreviouslyFocusedEl) modalPreviouslyFocusedEl.focus();
-}
-document.getElementById('modalClose').onclick = closeAddModal;
-document.getElementById('pcCloseBtn').onclick = closeAddModal;
-document.getElementById('modalCancel').onclick = closeAddModal;
-document.getElementById('addModalBg').addEventListener('click', (e) => {
-  if (e.target.id === 'addModalBg') closeAddModal();
-});
-
-document.getElementById('pcBigAddBtn').onclick = () => {
-  document.getElementById('modalSubmit').click();
-};
-
-document.getElementById('modalSubmit').onclick = async () => {
-  const itemName = resolveItemName(document.getElementById('modalItemInput').value);
-  const rarity = document.getElementById('modalRarity').value;
-  const errEl = document.getElementById('modalError');
-  const cardErrEl = document.getElementById('cardError');
-  errEl.style.display = 'none';
-  cardErrEl.style.display = 'none';
-  
-  if (!itemName || !modalItemMap[itemName]) {
-    errEl.textContent = 'Pick an item from the list.';
-    errEl.style.display = 'block';
-    return;
-  }
-  const token = localStorage.getItem('sf_token');
-
-  closeAddModal();
-
-  const addBtnEl = document.getElementById('addBtn');
-  addBtnEl.disabled = true;
-
-  await enqueueMutation(async () => {
-    try {
-      const r = await fetch(`${API_BASE}/api/items/add`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ item: itemName, rarity, affixes: [...modalSelectedAffixes] }),
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error || 'Something went wrong.');
-
-      if (!data.synced) {
-        console.warn('Item saved locally but failed to sync to GitHub after retries:', data.item?.name);
-      }
-
-      items.push(data.item);
-      currentPage = 1;
-      render();
-    } catch (e) {
-      showToast(e.message, true);
-    } finally {
-      addBtnEl.disabled = false;
+  const marks = new Array(text.length).fill(false);
+  words.filter(w => w.length >= 2).forEach(w => {
+    let at = lower.indexOf(w);
+    while (at !== -1) {
+      for (let k = at; k < at + w.length; k++) marks[k] = true;
+      at = lower.indexOf(w, at + 1);
     }
   });
-};
+  let out = '', open = false;
+  for (let k = 0; k < text.length; k++) {
+    if (marks[k] && !open) { out += '<mark class="search-highlight">'; open = true; }
+    if (!marks[k] && open) { out += '</mark>'; open = false; }
+    out += escapeHtml(text[k]);
+  }
+  return out + (open ? '</mark>' : '');
+}
 
+// ---------------------------------------------------------------------------------------------
+// Sorting: click a header (or pick from the menu on phones) to sort by it; click again for the
+// other direction, a third time for the default order.
+// ---------------------------------------------------------------------------------------------
 function abbreviateClasses(classes) {
   if (!classes || !classes.length) return '';
   if (classes.includes('All')) return 'All';
@@ -1575,202 +1086,299 @@ function abbreviateClasses(classes) {
   });
   return output.join(', ');
 }
-
-// "New" badge is relative to your last visit, not a fixed 24h window. We read the stored
-// timestamp first (so it still applies for the whole current session), then immediately overwrite
-// it with now - so next time you open the page, only items added since *this* visit count as new.
-const LAST_VISIT_KEY = 'sf_last_visit';
-const lastVisitTimestamp = Number(localStorage.getItem(LAST_VISIT_KEY)) || (Date.now() - 24 * 60 * 60 * 1000);
-localStorage.setItem(LAST_VISIT_KEY, String(Date.now()));
-
-function isItemNew(i) {
-  return !!(i.added_at && new Date(i.added_at).getTime() > lastVisitTimestamp);
-}
-
-const tooltipEl = document.getElementById('tooltipEl');
-function showTooltip(triggerEl, text) {
-  tooltipEl.textContent = text;
-  tooltipEl.style.display = 'block';
-  const rect = triggerEl.getBoundingClientRect();
-  const margin = 8;
-  const tw = tooltipEl.offsetWidth;
-  const th = tooltipEl.offsetHeight;
-  let left = rect.left;
-  let top = rect.top - th - margin;
-  if (left + tw > window.innerWidth - margin) left = window.innerWidth - tw - margin;
-  if (left < margin) left = margin;
-  if (top < margin) top = rect.bottom + margin;
-  tooltipEl.style.left = `${left}px`;
-  tooltipEl.style.top = `${top}px`;
-}
-function hideTooltip() {
-  tooltipEl.style.display = 'none';
-  delete tooltipEl.dataset.owner;
-}
-
-const deleteConfirmEl = document.getElementById('deleteConfirmEl');
-let deleteConfirmItemId = null;
-function showDeleteConfirm(triggerEl, itemId) {
-  deleteConfirmItemId = itemId;
-  deleteConfirmEl.style.display = 'flex';
-  const rect = triggerEl.getBoundingClientRect();
-  const margin = 6;
-  const w = deleteConfirmEl.offsetWidth;
-  let left = rect.left;
-  let top = rect.bottom + margin;
-  if (left + w > window.innerWidth - margin) left = window.innerWidth - w - margin;
-  if (left < margin) left = margin;
-  deleteConfirmEl.style.left = `${left}px`;
-  deleteConfirmEl.style.top = `${top}px`;
-}
-function hideDeleteConfirm() {
-  deleteConfirmEl.style.display = 'none';
-  deleteConfirmItemId = null;
-}
-document.getElementById('deleteConfirmBtn').addEventListener('click', async (e) => {
-  e.stopPropagation();
-  const id = deleteConfirmItemId;
-  if (!id) return;
-
-  const btn = e.currentTarget;
-  const originalText = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = 'Removing...';
-  removeInProgress = true;
-
-  await enqueueMutation(async () => {
-    try {
-      const token = localStorage.getItem('sf_token');
-      const r = await fetch(`${API_BASE}/api/items/${id}/remove`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error || 'Something went wrong.');
-
-      // Server confirmed - only now does it actually leave the table.
-      const removedIndex = items.findIndex(x => x.id === id);
-      if (removedIndex !== -1) items.splice(removedIndex, 1);
-      hideDeleteConfirm();
-      render();
-    } catch (err) {
-      showToast(err.message, true);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = originalText;
-      removeInProgress = false;
-    }
-  });
-});
-
-const toastEl = document.getElementById('toastEl');
-let toastTimeout = null;
-function showToast(message, isError = false) {
-  clearTimeout(toastTimeout);
-  toastEl.textContent = message;
-  toastEl.classList.toggle('error', isError);
-  toastEl.classList.add('show');
-  toastTimeout = setTimeout(() => { toastEl.classList.remove('show'); }, 6000);
-}
-toastEl.addEventListener('click', () => {
-  clearTimeout(toastTimeout);
-  toastEl.classList.remove('show');
-});
-
-const actionConfirmEl = document.getElementById('actionConfirmEl');
-const actionConfirmText = document.getElementById('actionConfirmText');
-const actionConfirmBtn = document.getElementById('actionConfirmBtn');
-let actionConfirmItemId = null;
-let actionConfirmFn = null;
-let actionInProgress = false;
-
-function showActionConfirm(triggerEl, itemId, text, btnLabel, onConfirm) {
-  actionConfirmItemId = itemId;
-  actionConfirmFn = onConfirm;
-  actionConfirmText.textContent = text;
-  actionConfirmBtn.textContent = btnLabel;
-  actionConfirmEl.style.display = 'flex';
-  const rect = triggerEl.getBoundingClientRect();
-  const margin = 6;
-  const w = actionConfirmEl.offsetWidth;
-  let left = rect.left;
-  let top = rect.bottom + margin;
-  if (left + w > window.innerWidth - margin) left = window.innerWidth - w - margin;
-  if (left < margin) left = margin;
-  actionConfirmEl.style.left = `${left}px`;
-  actionConfirmEl.style.top = `${top}px`;
-}
-function hideActionConfirm() {
-  actionConfirmEl.style.display = 'none';
-  actionConfirmItemId = null;
-  actionConfirmFn = null;
-}
-actionConfirmBtn.addEventListener('click', async (e) => {
-  e.stopPropagation();
-  const fn = actionConfirmFn;
-  if (!fn) return;
-  const btn = e.currentTarget;
-  const originalText = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = 'Sending...';
-  actionInProgress = true;
-  try {
-    await fn();
-  } finally {
-    btn.disabled = false;
-    btn.textContent = originalText;
-    actionInProgress = false;
-    hideActionConfirm();
+const STATUS_RANK = { available: 0, requested: 1, returning: 2, rented: 3 };
+function columnSortValue(item, key) {
+  switch (key) {
+    case 'name': return item.name || '';
+    case 'category': return item.category || '';
+    case 'class': return abbreviateClasses(item.classes) || '';
+    case 'owner': return item.owner_name || '';
+    case 'status': return STATUS_RANK[statusKind(item)] ?? 9;
+    default: return '';
   }
+}
+function compareItems(a, b) {
+  if (columnSort) {
+    let av = columnSortValue(a, columnSort.key), bv = columnSortValue(b, columnSort.key);
+    if (typeof av === 'string') { av = av.toLowerCase(); bv = String(bv).toLowerCase(); }
+    const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+    if (cmp) return columnSort.dir === 'asc' ? cmp : -cmp;
+  }
+  const aNew = isItemNew(a), bNew = isItemNew(b);
+  if (aNew !== bNew) return aNew ? -1 : 1;
+  const aOut = a.status === 'rented', bOut = b.status === 'rented';
+  if (aOut !== bOut) return aOut ? 1 : -1;
+  const aLevel = a.level || 0, bLevel = b.level || 0;
+  if (aLevel !== bLevel) return bLevel - aLevel;
+  const rarity = (RARITY_RANK[b.rarity] ?? -1) - (RARITY_RANK[a.rarity] ?? -1);
+  if (rarity) return rarity;
+  return (a.name || '').localeCompare(b.name || '') || (a.owner_name || '').localeCompare(b.owner_name || '');
+}
+function setSort(key) {
+  if (!columnSort || columnSort.key !== key) columnSort = { key, dir: 'asc' };
+  else if (columnSort.dir === 'asc') columnSort.dir = 'desc';
+  else columnSort = null;
+  currentPage = 1;
+  render();
+}
+document.querySelectorAll('thead th.sortable').forEach(th => {
+  th.addEventListener('click', () => setSort(th.dataset.sort));
+  th.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSort(th.dataset.sort); }
+  });
 });
-
-async function requestBorrow(itemId) {
-  await enqueueMutation(async () => {
-    try {
-      const token = localStorage.getItem('sf_token');
-      const r = await fetch(`${API_BASE}/api/items/${itemId}/request-borrow`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error || 'Something went wrong.');
-      showToast('Request sent! The owner will review it in Discord.');
-    } catch (err) {
-      showToast(err.message, true);
+$('sortSelect').addEventListener('change', (e) => {
+  const [key, dir] = e.target.value.split(':');
+  columnSort = key ? { key, dir } : null;
+  currentPage = 1;
+  render();
+});
+function updateSortUi() {
+  document.querySelectorAll('thead th.sortable').forEach(th => {
+    const arrow = th.querySelector('.sort-arrow');
+    if (columnSort && columnSort.key === th.dataset.sort) {
+      arrow.textContent = columnSort.dir === 'asc' ? '▲' : '▼';
+      th.setAttribute('aria-sort', columnSort.dir === 'asc' ? 'ascending' : 'descending');
+    } else {
+      arrow.textContent = '';
+      th.setAttribute('aria-sort', 'none');
     }
   });
+  const sel = $('sortSelect');
+  const value = columnSort ? `${columnSort.key}:${columnSort.dir}` : '';
+  sel.value = [...sel.options].some(o => o.value === value) ? value : '';
 }
 
-async function requestReturn(itemId) {
-  await enqueueMutation(async () => {
-    try {
-      const token = localStorage.getItem('sf_token');
-      const r = await fetch(`${API_BASE}/api/items/${itemId}/request-return`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error || 'Something went wrong.');
-      showToast('Return request sent! The owner will confirm it in Discord.');
-    } catch (err) {
-      showToast(err.message, true);
+function updateActiveFilterBadge() {
+  let count = 0;
+  if ($('search').value.trim()) count++;
+  if (selType) count++;
+  if (selClass) count++;
+  if (selToolCat) count++;
+  if (selLevel !== null) count++;
+  count += selAffixes.size;
+  if (mineOnly) count++;
+  if (rentedOnly) count++;
+  const badge = $('activeFilterBadge');
+  if (count > 0) {
+    badge.textContent = String(count);
+    badge.title = `${count} active filter${count === 1 ? '' : 's'}`;
+    badge.style.display = 'block';
+  } else {
+    badge.style.display = 'none';
+  }
+  return count;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Login
+// ---------------------------------------------------------------------------------------------
+function showAuthError(text) {
+  const el = $('authError');
+  el.textContent = text;
+  el.style.display = text ? 'block' : 'none';
+}
+
+function handleAuthRedirect() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('token');
+  const authErr = params.get('auth_error');
+  if (token) { store.set('sf_token', token); params.delete('token'); }
+  if (authErr) {
+    const messages = {
+      not_a_member: "You are not a member of Sleeping Forest.",
+      missing_code: 'Discord login was cancelled or failed.',
+      server_error: 'Something went wrong logging you in - try again.',
+    };
+    showAuthError(messages[authErr] || 'Login failed - try again.');
+    params.delete('auth_error');
+  }
+  const qs = params.toString();
+  try { history.replaceState({}, '', window.location.pathname + (qs ? '?' + qs : '') + location.hash); } catch {}
+}
+
+// Only a 401 (the login really expired) logs you out. Anything else - no signal, the bot
+// restarting - keeps the login and tries again after 5, 15, 30, then every 60 seconds.
+let userRetryTimer = null;
+async function loadUser(attempt = 0) {
+  clearTimeout(userRetryTimer);
+  if (!store.get('sf_token')) { currentUser = null; authState = 'none'; renderAuthBox(); return; }
+  if (!currentUser) { authState = 'checking'; renderAuthBox(); }
+  try {
+    currentUser = await apiFetch('/api/me', { auth: true });
+    authState = 'ok';
+  } catch (e) {
+    if (e.status === 401) return;  // onLoginExpired already logged out and said so
+    authState = currentUser ? 'ok' : 'offline';
+    const wait = [5, 15, 30, 60][Math.min(attempt, 3)] * 1000;
+    userRetryTimer = setTimeout(() => loadUser(attempt + 1), wait);
+  }
+  renderAuthBox();
+  render();
+}
+
+function onLoginExpired() {
+  store.remove('sf_token');
+  const wasLoggedIn = !!currentUser || authState !== 'none';
+  currentUser = null; authState = 'none';
+  mineOnly = false; rentedOnly = false;
+  renderAuthBox(); render();
+  if (wasLoggedIn) showAuthError('Your login expired. Log in with Discord again.');
+}
+
+function logout() {
+  store.remove('sf_token');
+  currentUser = null; authState = 'none';
+  mineOnly = false; rentedOnly = false;
+  renderAuthBox(); render();
+}
+
+function login() { window.location.href = `${API_BASE}/auth/discord/login`; }
+
+// Keeps rentedOnlyBtn's visibility and the row's mobile grid in sync with mineOnly from one place.
+function syncMineButtons() {
+  $('rentedOnlyBtn').style.display = mineOnly ? 'inline-block' : 'none';
+  document.querySelector('.row').classList.toggle('rented-active', mineOnly);
+  setPressed($('mineBtn'), mineOnly);
+  setPressed($('rentedOnlyBtn'), rentedOnly);
+}
+
+function renderAuthBox() {
+  const box = $('authBox');
+  const linked = !!(currentUser && currentUser.linked);
+  if (currentUser) {
+    const avatarUrl = currentUser.avatar
+      ? `https://cdn.discordapp.com/avatars/${encodeURIComponent(currentUser.id)}/${encodeURIComponent(currentUser.avatar)}.png?size=64`
+      : 'https://cdn.discordapp.com/embed/avatars/0.png';
+    const displayName = currentUser.ingame_name || currentUser.username;
+    const requests = currentUser.officer
+      ? `<a class="officer-link" href="pending.html">Requests${openRequests ? ` (${openRequests})` : ''}</a>` : '';
+    box.innerHTML = `<img src="${avatarUrl}" alt=""><span class="uname">${escapeHtml(displayName)}</span>${requests}<button class="link-muted" id="logoutBtn" type="button">Log out</button>`;
+    $('logoutBtn').onclick = logout;
+    showAuthError('');
+  } else if (authState === 'checking') {
+    box.innerHTML = '<span class="note">Checking your login...</span>';
+  } else if (authState === 'offline') {
+    box.innerHTML = `<span class="note">Can't check your login right now. Trying again...</span>`;
+  } else {
+    box.innerHTML = `<button class="btn-discord" id="loginBtn" type="button">Log in with Discord</button>`;
+    $('loginBtn').onclick = login;
+  }
+  // Only once it's certain (logged out, or not linked): a login still being checked keeps the filter.
+  if (authState === 'none' || (currentUser && !currentUser.linked)) { mineOnly = false; rentedOnly = false; }
+  $('mineBtn').style.display = linked ? 'inline-block' : 'none';
+  $('addBtn').style.display = linked ? 'inline-block' : 'none';
+  $('removeHint').style.display = linked ? 'block' : 'none';
+  const linkHint = $('linkHint');
+  if (currentUser && !currentUser.linked) {
+    linkHint.textContent = 'Run !link <ingame_name> in Discord (or press Link a character on the link panel) to add, borrow or remove items.';
+    linkHint.style.display = 'block';
+  } else {
+    linkHint.style.display = 'none';
+  }
+  syncMineButtons();
+}
+
+$('mineBtn').onclick = () => {
+  mineOnly = !mineOnly;
+  if (!mineOnly) rentedOnly = false;
+  syncMineButtons();
+  currentPage = 1;
+  render();
+};
+$('rentedOnlyBtn').onclick = () => {
+  rentedOnly = !rentedOnly;
+  syncMineButtons();
+  currentPage = 1;
+  render();
+};
+
+// ---------------------------------------------------------------------------------------------
+// Status of an item, and what a click on it does
+// ---------------------------------------------------------------------------------------------
+// Loans have no due date: it's an idle game, nobody can say when they'll be able to give an item
+// back, so there's no "Overdue" either.
+function statusKind(i) {
+  const req = i.request;
+  // An open return request shows even when the item is already back (its approval got half way):
+  // the owner or an officer finishes it with the same Confirm button.
+  if (req && req.type === 'return') return 'returning';
+  if (i.status === 'rented') return 'rented';
+  if (req && req.type === 'borrow') return 'requested';
+  return 'available';
+}
+function loanSentence(i, mine) {
+  const since = i.borrowed_at ? fmtDate(Date.parse(i.borrowed_at)) : '';
+  const who = mine ? "You've had it" : `Lent to ${i.borrower_name || 'someone'}`;
+  return `${who}${since ? ' since ' + since : ''}.`;
+}
+// {label, color, action, title}: exactly one action per row, encoded as data-action for the
+// delegated click handler.
+function statusInfo(i) {
+  const me = currentUser && currentUser.linked ? String(currentUser.id) : null;
+  const officer = !!(currentUser && currentUser.officer);
+  const isOwner = !!me && String(i.owner_id) === me;
+  const isBorrower = !!me && String(i.borrower_id) === me;
+  const kind = statusKind(i);
+  const owner = i.owner_name || 'the owner';
+  const req = i.request || {};
+  const byMe = !!me && String(req.by_id) === me;
+  switch (kind) {
+    case 'requested':
+      return { label: 'Requested', color: 'var(--status-waiting)', action: 'tooltip',
+               title: byMe ? `You asked to borrow this. Waiting for ${owner} to answer in Discord.`
+                    : isOwner ? `${req.by || 'Someone'} asked to borrow this. Answer with the buttons in your Discord DMs.`
+                    : `${req.by || 'Someone'} asked to borrow this.` };
+    case 'returning':
+      if (isOwner || officer) return { label: 'Returning', color: 'var(--status-waiting)', action: 'confirmreturn' };
+      return { label: 'Returning', color: 'var(--status-waiting)', action: 'tooltip',
+               title: isBorrower || byMe ? `You said you've given it back. Waiting for ${owner} to confirm.`
+                                 : `${req.by || 'The borrower'} is returning it. Waiting for ${owner} to confirm.` };
+    case 'rented': {
+      const label = 'Rented', color = 'var(--status-out)';
+      if (isBorrower) return { label, color, action: 'return' };
+      if (isOwner || officer) return { label, color, action: 'markreturned' };
+      return { label, color, action: 'tooltip', title: loanSentence(i, false) };
+    }
+    default:
+      if (me && !isOwner) return { label: 'Available', color: 'var(--status-available)', action: 'borrow' };
+      return { label: 'Available', color: 'var(--status-available)', action: '' };
+  }
+}
+
+// Identical items (same owner, name, rarity and affixes) that are free to borrow share one row
+// with a count, instead of e.g. 54 Nyxium Ring rows. Lent-out and requested ones keep their own rows.
+function stackKey(i) {
+  return [i.owner_id, i.name, i.rarity, [...(i.affixes || [])].sort().join('|')].join('\u0001');
+}
+function buildRows(list) {
+  const rows = [];
+  const stacks = new Map();
+  list.forEach(i => {
+    if (statusKind(i) === 'available') {
+      const key = stackKey(i);
+      let row = stacks.get(key);
+      if (!row) { row = { items: [] }; stacks.set(key, row); rows.push(row); }
+      row.items.push(i);
+    } else {
+      rows.push({ items: [i] });
     }
   });
+  return rows;
 }
 
-// Column widths are measured against the entire filtered set (every matching item, not just
-// the current page), so they stay constant across pagination and column-sort - they only
-// change when the actual filter/search changes, since that's the only thing that changes
-// what "filtered" contains. This is what fixes columns jumping around between pages.
-function computeColumnWidths(filteredItems) {
+// Column widths are measured against every matching row (not just this page), so they stay the
+// same across pages and sorting and only change with the filters.
+function computeColumnWidths(rows) {
   const canvas = computeColumnWidths._canvas || (computeColumnWidths._canvas = document.createElement('canvas'));
   const ctx = canvas.getContext('2d');
   ctx.font = '15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
   const measure = (t) => ctx.measureText(t || '').width;
 
   let maxName = measure('Item'), maxCategory = measure('Category'), maxClass = measure('Class'), maxOwner = measure('Added by'), maxAffix = measure('Affixes');
-  filteredItems.forEach(i => {
-    maxName = Math.max(maxName, measure(i.name));
+  rows.forEach(row => {
+    const i = row.items[0];
+    maxName = Math.max(maxName, measure(i.name) + (row.items.length > 1 ? 44 : 0));
     maxCategory = Math.max(maxCategory, measure(i.category));
     maxClass = Math.max(maxClass, measure(abbreviateClasses(i.classes)));
     maxOwner = Math.max(maxOwner, measure(i.owner_name));
@@ -1784,155 +1392,96 @@ function computeColumnWidths(filteredItems) {
     class: Math.ceil(maxClass) + 32,
     owner: Math.ceil(maxOwner) + 32,
     affixes: Math.ceil(maxAffix) + 32,
-    status: 130,
+    status: 140,
   };
 }
 function applyColumnWidths(w) {
-  document.getElementById('thName').style.width = w.name + 'px';
-  document.getElementById('thCategory').style.width = w.category + 'px';
-  document.getElementById('thClass').style.width = w.class + 'px';
-  document.getElementById('thOwner').style.width = w.owner + 'px';
-  document.getElementById('thAffixes').style.width = w.affixes + 'px';
-  document.getElementById('thStatus').style.width = w.status + 'px';
+  $('thName').style.width = w.name + 'px';
+  $('thCategory').style.width = w.category + 'px';
+  $('thClass').style.width = w.class + 'px';
+  $('thOwner').style.width = w.owner + 'px';
+  $('thAffixes').style.width = w.affixes + 'px';
+  $('thStatus').style.width = w.status + 'px';
 }
 
-function render() {
-  saveFilterState();
-  const q = document.getElementById('search').value.trim();
-  const filtered = items.filter(i =>
-    (!q || fuzzyMatch(i.name, q) || (i.affixes || []).some(a => fuzzyMatch(a, q))) &&
+function passesFilters(i, words = searchWords()) {
+  return matchesSearch(i, words) &&
     itemMatchesFilters(i) &&
     (selLevel === null || i.level === selLevel) &&
-    (!mineOnly || !currentUser || i.owner_id === currentUser.id || i.borrower_id === currentUser.id) &&
+    (!mineOnly || !currentUser || String(i.owner_id) === String(currentUser.id) || String(i.borrower_id) === String(currentUser.id)) &&
     (!rentedOnly || i.status === 'rented') &&
-    [...selAffixes].every(a => (i.affixes || []).includes(a))
-  ).sort((a, b) => {
-    if (columnSort) {
-      const av = String(columnSortValue(a, columnSort.key)).toLowerCase();
-      const bv = String(columnSortValue(b, columnSort.key)).toLowerCase();
-      const cmp = av < bv ? -1 : av > bv ? 1 : 0;
-      return columnSort.dir === 'asc' ? cmp : -cmp;
-    }
-    const aNew = isItemNew(a), bNew = isItemNew(b);
-    if (aNew !== bNew) return aNew ? -1 : 1;
-    const aRented = a.status === 'rented', bRented = b.status === 'rented';
-    if (aRented !== bRented) return aRented ? 1 : -1;
-    const aLevel = a.level || 0, bLevel = b.level || 0;
-    if (aLevel !== bLevel) return bLevel - aLevel;
-    const aRarity = RARITY_ORDER.indexOf(a.rarity), bRarity = RARITY_ORDER.indexOf(b.rarity);
-    return bRarity - aRarity;
-  });
-  applyColumnWidths(computeColumnWidths(filtered));
+    [...selAffixes].every(a => (i.affixes || []).includes(a));
+}
+
+// ---------------------------------------------------------------------------------------------
+// The table
+// ---------------------------------------------------------------------------------------------
+function render() {
+  if (!itemsLoaded) return;
+  saveFilterState();
+  const words = searchWords();
+  const filtered = items.filter(i => passesFilters(i, words)).sort(compareItems);
+  const rowsData = buildRows(filtered);
+  applyColumnWidths(computeColumnWidths(rowsData));
   const pageSize = getPageSize();
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(rowsData.length / pageSize));
   if (currentPage > totalPages) currentPage = totalPages;
   if (currentPage < 1) currentPage = 1;
   const pageStart = (currentPage - 1) * pageSize;
-  const pageItems = filtered.slice(pageStart, pageStart + pageSize);
-  const rows = document.getElementById('rows');
-  rows.innerHTML = '';
-  document.getElementById('empty').style.display = filtered.length ? 'none' : 'block';
-  const rangeStart = filtered.length ? pageStart + 1 : 0;
-  const rangeEnd = Math.min(pageStart + pageSize, filtered.length);
-  document.getElementById('itemCount').textContent =
-    (filtered.length === items.length && totalPages === 1)
-      ? `${items.length} item${items.length === 1 ? '' : 's'} in the chest`
-      : `Showing ${rangeStart}-${rangeEnd} of ${filtered.length} items`;
-  updateSortArrows();
-  updateActiveFilterBadge();
+  const pageRows = rowsData.slice(pageStart, pageStart + pageSize);
+  const rowsEl = $('rows');
+  rowsEl.innerHTML = '';
+  $('empty').style.display = filtered.length ? 'none' : 'block';
+  const activeFilters = updateActiveFilterBadge();
+  const s = (n) => (n === 1 ? '' : 's');
+  let countText = (activeFilters === 0)
+    ? `${items.length} item${s(items.length)} in the chest`
+    : `${filtered.length} of ${items.length} item${s(items.length)}`;
+  if (totalPages > 1) countText += ` · page ${currentPage} of ${totalPages}`;
+  $('itemCount').textContent = countText;
+  updateSortUi();
   renderPagination(totalPages);
-  hideTooltip();
-  hideDeleteConfirm();
-  hideActionConfirm();
-  const canManage = currentUser && currentUser.linked;
-  const rowsFragment = document.createDocumentFragment();
-  pageItems.forEach(i => {
-    const rarityColor = rarityColorVar(i.rarity);
-    const isNew = isItemNew(i);
-    const statusColor = i.status === 'available' ? '#4ade80' : '#f87171';
-    const statusLabel = i.status ? i.status.charAt(0).toUpperCase() + i.status.slice(1) : 'Unknown';
-    const isMine = canManage && i.owner_id === currentUser.id;
-    const isBorrower = canManage && i.borrower_id === currentUser.id;
-    let statusTitle = '';
-    if (i.status === 'rented' && i.borrower_name && !isBorrower) {
-      const d = i.borrowed_at ? new Date(i.borrowed_at).toLocaleDateString() : '';
-      statusTitle = `Rented to ${i.borrower_name}${d ? ' on ' + d : ''}`;
-    }
-    const canRequestBorrow = canManage && i.status === 'available' && !isMine;
-    const canRequestReturn = canManage && i.status === 'rented' && isBorrower;
-    // Exactly one of these applies per row, same as the old if/else-if chain - encoded as a
-    // single data-action value the delegated click handler below switches on.
-    let statusAction = '';
-    if (statusTitle) statusAction = 'tooltip';
-    else if (canRequestBorrow) statusAction = 'borrow';
-    else if (canRequestReturn) statusAction = 'return';
-    const statusClickable = !!statusAction;
-    const canRemoveThis = canManage && (i.owner_id === currentUser.id || currentUser.officer);
+  hidePopups();
+  const me = currentUser && currentUser.linked ? String(currentUser.id) : null;
+  const officer = !!(currentUser && currentUser.officer);
+  const fragment = document.createDocumentFragment();
+  pageRows.forEach(row => {
+    const i = row.items[0];
+    const n = row.items.length;
+    const st = statusInfo(i);
+    const isNew = row.items.some(isItemNew);
+    // Remove: your own items (or any, for officers); from a stack, the last copy goes.
+    const canRemove = (me && String(i.owner_id) === me) || (officer && currentUser.linked);
+    const removeId = row.items[n - 1].id;
     const tr = document.createElement('tr');
-    // Enter-to-activate is scoped to borrow/return specifically - those are the actions
-    // worth triggering from the keyboard; tooltip/delete stay click/tap only.
-    const keyboardActionable = statusAction === 'borrow' || statusAction === 'return';
+    const nameAttrs = canRemove
+      ? ` data-id="${escapeHtml(removeId)}" data-action="delete" data-count="${n}" tabindex="0" role="button" aria-label="Remove ${escapeHtml(i.name)}"`
+      : '';
+    const statusAttrs = st.action
+      ? ` data-id="${escapeHtml(i.id)}" data-action="${st.action}" data-count="${n}" tabindex="0" role="button"${st.title ? ` data-title="${escapeHtml(st.title)}"` : ''}`
+      : '';
     tr.innerHTML = `
       <td>
         <div class="itemname">
-          <span class="item-text${canRemoveThis ? ' clickable' : ''}" style="color:${rarityColor}"${canRemoveThis ? ` data-id="${i.id}" data-action="delete"` : ''}>${escapeHtml(i.name)}</span>
+          <span class="item-text${canRemove ? ' clickable' : ''}" style="color:${rarityColorVar(i.rarity)}"${nameAttrs}>${highlightWords(i.name, words)}</span>
+          ${n > 1 ? `<span class="stackbadge" title="${n} identical items">×${n}</span>` : ''}
           ${isNew ? '<span class="newbadge">New</span>' : ''}
         </div>
       </td>
       <td class="muted" data-label="Category">${escapeHtml(i.category || '')}</td>
       <td class="muted" data-label="Class">${escapeHtml(abbreviateClasses(i.classes))}</td>
-      <td class="muted" data-label="Added by">${escapeHtml(i.owner_name || '')}</td>
-      <td><div class="affixlist">${(i.affixes || []).map(a => `<span class="affix">${highlightMatch(a, q)}</span>`).join('')}</div></td>
-      <td><span class="status${statusClickable ? ' clickable' : ''}"${statusAction ? ` data-id="${i.id}" data-action="${statusAction}" data-title="${escapeHtml(statusTitle)}"` : ''}${keyboardActionable ? ' tabindex="0"' : ''}><span class="dot" style="background:${statusColor}"></span>${statusLabel}</span></td>
+      <td class="muted" data-label="Added by">${highlightWords(i.owner_name || '', words)}</td>
+      <td><div class="affixlist">${(i.affixes || []).map(a => `<span class="affix">${highlightWords(a, words)}</span>`).join('')}</div></td>
+      <td><span class="status${st.action ? ' clickable' : ''}"${statusAttrs}><span class="dot" style="background:${st.color}"></span>${escapeHtml(st.label)}</span></td>
     `;
-    rowsFragment.appendChild(tr);
+    fragment.appendChild(tr);
   });
-  rows.appendChild(rowsFragment);
+  rowsEl.appendChild(fragment);
 }
 
-// Single delegated listener replaces the old per-row listeners (one pair per row before this).
-// Clicks bubble up from whichever element was actually clicked to #rows, where data-action/
-// data-id on that element tell us what to do - same behaviors as before, just one listener
-// total instead of up to 2 per row.
-document.getElementById('rows').addEventListener('click', (e) => {
-  const target = e.target.closest('[data-action]');
-  if (!target || actionInProgress) return;
-  const action = target.dataset.action;
-  const id = target.dataset.id;
-  const item = items.find(x => x.id === id);
-  if (!item) return;
-  e.stopPropagation();
-
-  if (action === 'delete') {
-    if (removeInProgress) return;
-    if (deleteConfirmItemId === id) { hideDeleteConfirm(); return; }
-    showDeleteConfirm(target, id);
-  } else if (action === 'tooltip') {
-    const isOpen = tooltipEl.style.display === 'block' && tooltipEl.dataset.owner === id;
-    if (isOpen) { hideTooltip(); return; }
-    tooltipEl.dataset.owner = id;
-    showTooltip(target, target.dataset.title);
-  } else if (action === 'borrow') {
-    if (actionConfirmItemId === id) { hideActionConfirm(); return; }
-    showActionConfirm(target, id, 'Request to borrow?', 'Request', () => requestBorrow(id));
-  } else if (action === 'return') {
-    if (actionConfirmItemId === id) { hideActionConfirm(); return; }
-    const d = item.borrowed_at ? new Date(item.borrowed_at).toLocaleDateString() : '';
-    showActionConfirm(target, id, `Rented by you${d ? ' on ' + d : ''}. Return?`, 'Return', () => requestReturn(id));
-  }
-});
-
-document.getElementById('rows').addEventListener('keydown', (e) => {
-  if (e.key !== 'Enter') return;
-  const target = e.target.closest('[data-action="borrow"], [data-action="return"]');
-  if (!target) return;
-  e.preventDefault();
-  target.click();
-});
-
 function renderLoadingSkeleton(rowCount = 8) {
-  const rows = document.getElementById('rows');
-  rows.innerHTML = '';
+  const rowsEl = $('rows');
+  rowsEl.innerHTML = '';
   const widths = ['70%', '60%', '50%', '55%', '80%', '40%'];
   const fragment = document.createDocumentFragment();
   for (let i = 0; i < rowCount; i++) {
@@ -1941,7 +1490,7 @@ function renderLoadingSkeleton(rowCount = 8) {
     tr.innerHTML = widths.map(w => `<td><div class="skeleton-block" style="width:${w}"></div></td>`).join('');
     fragment.appendChild(tr);
   }
-  rows.appendChild(fragment);
+  rowsEl.appendChild(fragment);
 }
 
 function getPageList(cur, total) {
@@ -1961,15 +1510,21 @@ function getPageList(cur, total) {
 }
 
 function renderPagination(totalPages) {
-  const el = document.getElementById('paginationEl');
+  const el = $('paginationEl');
   if (totalPages <= 1) { el.style.display = 'none'; el.innerHTML = ''; return; }
   el.style.display = 'flex';
   el.innerHTML = '';
 
-  const goTo = (p) => { currentPage = p; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  // A new page starts at the top of the list, not the top of the page (above all the filters).
+  const goTo = (p) => {
+    currentPage = p;
+    render();
+    const top = document.querySelector('.tablewrap').getBoundingClientRect().top + window.scrollY - 16;
+    if (window.scrollY > top) window.scrollTo({ top, behavior: 'smooth' });
+  };
 
   const prevBtn = document.createElement('button');
-  prevBtn.textContent = '\u2039 Previous';
+  prevBtn.textContent = '‹ Previous';
   prevBtn.disabled = currentPage === 1;
   prevBtn.onclick = () => goTo(currentPage - 1);
   el.appendChild(prevBtn);
@@ -1984,24 +1539,725 @@ function renderPagination(totalPages) {
     }
     const btn = document.createElement('button');
     btn.textContent = p;
-    if (p === currentPage) btn.classList.add('active');
+    if (p === currentPage) { btn.classList.add('active'); btn.setAttribute('aria-current', 'page'); }
     btn.onclick = () => goTo(p);
     el.appendChild(btn);
   });
 
   const nextBtn = document.createElement('button');
-  nextBtn.textContent = 'Next \u203a';
+  nextBtn.textContent = 'Next ›';
   nextBtn.disabled = currentPage === totalPages;
   nextBtn.onclick = () => goTo(currentPage + 1);
   el.appendChild(nextBtn);
 }
 
-document.querySelector('.tablewrap').addEventListener('scroll', () => { hideTooltip(); hideDeleteConfirm(); hideActionConfirm(); });
-window.addEventListener('scroll', () => { hideTooltip(); hideDeleteConfirm(); hideActionConfirm(); }, true);
+// ---------------------------------------------------------------------------------------------
+// Tooltip and confirm popups: placed next to what was clicked, above it when there's no room
+// below, and they follow it while scrolling (closing only when it scrolls out of view).
+// ---------------------------------------------------------------------------------------------
+const tooltipEl = $('tooltipEl');
+const confirmEl = $('confirmEl');
+const confirmBtn = $('confirmBtn');
+let popupTrigger = null;
+let popupEl = null;
+let confirmFn = null;
+
+function placePopup(el, trigger, preferAbove) {
+  const rect = trigger.getBoundingClientRect();
+  const margin = 6;
+  const w = el.offsetWidth, h = el.offsetHeight;
+  let left = Math.min(Math.max(margin, rect.left), window.innerWidth - w - margin);
+  const below = rect.bottom + margin, above = rect.top - h - margin;
+  const fitsBelow = below + h <= window.innerHeight - margin, fitsAbove = above >= margin;
+  let top = preferAbove ? (fitsAbove ? above : below) : (fitsBelow || !fitsAbove ? below : above);
+  el.style.left = `${Math.max(margin, left)}px`;
+  el.style.top = `${top}px`;
+}
+function showTooltip(trigger, text) {
+  hidePopups();
+  tooltipEl.textContent = text;
+  tooltipEl.style.display = 'block';
+  placePopup(tooltipEl, trigger, true);
+  popupTrigger = trigger; popupEl = tooltipEl;
+}
+function showConfirm(trigger, text, label, onConfirm, danger = false) {
+  hidePopups();
+  $('confirmText').textContent = text;
+  confirmBtn.textContent = label;
+  confirmBtn.classList.toggle('danger', danger);
+  confirmBtn.disabled = false;
+  confirmEl.style.display = 'flex';
+  placePopup(confirmEl, trigger, false);
+  popupTrigger = trigger; popupEl = confirmEl; confirmFn = onConfirm;
+  confirmBtn.focus({ preventScroll: true });
+}
+function hidePopups(restoreFocus = false) {
+  const trigger = popupTrigger;
+  const hadFocus = confirmEl.contains(document.activeElement);
+  tooltipEl.style.display = 'none';
+  confirmEl.style.display = 'none';
+  popupTrigger = null; popupEl = null; confirmFn = null;
+  if ((restoreFocus || hadFocus) && trigger && document.body.contains(trigger)) trigger.focus({ preventScroll: true });
+}
+function followTrigger() {
+  if (!popupTrigger || !popupEl) return;
+  const r = popupTrigger.getBoundingClientRect();
+  if (!document.body.contains(popupTrigger) || r.bottom < 0 || r.top > window.innerHeight) { hidePopups(); return; }
+  placePopup(popupEl, popupTrigger, popupEl === tooltipEl);
+}
+window.addEventListener('scroll', followTrigger, true);
+
+confirmBtn.addEventListener('click', async (e) => {
+  e.stopPropagation();
+  const fn = confirmFn;
+  if (!fn || busy) return;
+  busy = true;
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = 'Working...';
+  try {
+    await fn();
+  } finally {
+    busy = false;
+    hidePopups(true);
+  }
+});
+confirmEl.addEventListener('click', (e) => e.stopPropagation());
+
+$('rows').addEventListener('click', (e) => {
+  const target = e.target.closest('[data-action]');
+  if (!target || busy) return;
+  const id = target.dataset.id;
+  const item = items.find(x => x.id === id);
+  if (!item) return;
+  e.stopPropagation();
+  if (popupTrigger === target) { hidePopups(true); return; }  // second click on the same thing closes it
+  const n = Number(target.dataset.count || 1);
+  switch (target.dataset.action) {
+    case 'tooltip':
+      showTooltip(target, target.dataset.title);
+      break;
+    case 'delete': {
+      // A lent item can be removed too (it may be gone in-game): the popup says who has it.
+      const lent = item.status === 'rented' ? `Lent to ${item.borrower_name || 'someone'}. ` : '';
+      showConfirm(target, n > 1 ? `Remove one of these ${n}?` : `${lent}Remove this item?`, 'Delete', () => removeItem(id), true);
+      break;
+    }
+    case 'borrow':
+      showConfirm(target, n > 1 ? `Request to borrow one of these ${n}?` : 'Request to borrow?', 'Request', () => requestBorrow(id));
+      break;
+    case 'return':
+      showConfirm(target, `${loanSentence(item, true)} Give it back?`, 'Return', () => requestReturn(id));
+      break;
+    case 'markreturned':
+      showConfirm(target, `${loanSentence(item, false)} Is it back?`, 'Mark returned', () => markReturned(id));
+      break;
+    case 'confirmreturn':
+      showConfirm(target, `${(item.request && item.request.by) || 'The borrower'} says it's back. Confirm?`, 'Confirm', () => markReturned(id));
+      break;
+  }
+});
+$('rows').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const target = e.target.closest('[data-action]');
+  if (!target) return;
+  e.preventDefault();
+  target.click();
+});
+document.addEventListener('click', () => hidePopups());
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if ($('addModalBg').style.display !== 'none') { closeAddModal(); return; }
+  hidePopups(true);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Actions
+// ---------------------------------------------------------------------------------------------
+const toastEl = $('toastEl');
+let toastTimeout = null;
+function showToast(message, isError = false) {
+  clearTimeout(toastTimeout);
+  toastEl.textContent = message;
+  toastEl.classList.toggle('error', isError);
+  toastEl.classList.add('show');
+  toastTimeout = setTimeout(() => { toastEl.classList.remove('show'); }, 6000);
+}
+toastEl.addEventListener('click', () => {
+  clearTimeout(toastTimeout);
+  toastEl.classList.remove('show');
+});
+
+function replaceItem(updated) {
+  const at = items.findIndex(x => x.id === updated.id);
+  if (at !== -1) items[at] = updated;
+}
+
+async function requestBorrow(id) {
+  await enqueueMutation(async () => {
+    try {
+      const data = await apiFetch(`/api/items/${encodeURIComponent(id)}/request-borrow`, { method: 'POST', auth: true });
+      const it = items.find(x => x.id === id);
+      if (it && data.request) { it.request = data.request; openRequests++; }
+      render(); renderAuthBox();
+      showToast('Request sent! The owner will answer in Discord.');
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
+}
+
+async function requestReturn(id) {
+  await enqueueMutation(async () => {
+    try {
+      const data = await apiFetch(`/api/items/${encodeURIComponent(id)}/request-return`, { method: 'POST', auth: true });
+      const it = items.find(x => x.id === id);
+      if (it && data.request) { it.request = data.request; openRequests++; }
+      render(); renderAuthBox();
+      showToast('Return request sent! The owner will confirm it in Discord.');
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
+}
+
+async function markReturned(id) {
+  await enqueueMutation(async () => {
+    try {
+      const before = items.find(x => x.id === id);
+      const data = await apiFetch(`/api/items/${encodeURIComponent(id)}/mark-returned`, { method: 'POST', auth: true });
+      if (before && before.request) openRequests = Math.max(0, openRequests - 1);
+      replaceItem(data.item);
+      render(); renderAuthBox();
+      showToast(`Marked as returned. It's back in the chest.`);
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
+}
+
+async function removeItem(id) {
+  await enqueueMutation(async () => {
+    try {
+      const before = items.find(x => x.id === id);
+      await apiFetch(`/api/items/${encodeURIComponent(id)}/remove`, { method: 'POST', auth: true });
+      items = items.filter(x => x.id !== id);  // only once the server confirmed
+      if (before && before.request) openRequests = Math.max(0, openRequests - 1);
+      buildLevels(); render(); renderAuthBox();
+      showToast(before ? `Removed ${before.rarity} ${before.name}.` : 'Removed.');
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------------------------
+// Add Item modal: type it in, or paste the item's stats copied from the game to fill it in (the
+// card view). The card shows exactly what will be saved: affixes it can't match are red.
+// ---------------------------------------------------------------------------------------------
+let draft = null;   // { itemName, rarity, affixes: Set, parsed, mode: 'form' | 'card' }
+let modalPreviouslyFocusedEl = null;
+
+function loadMaster() {
+  if (master) return Promise.resolve(master);
+  if (!masterPromise) {
+    masterPromise = apiFetch('/api/item-master').then(m => {
+      master = m;
+      itemByName = {};
+      (m.items || []).forEach(it => { itemByName[it.name] = it; });
+      return m;
+    }).catch(e => { masterPromise = null; throw e; });
+  }
+  return masterPromise;
+}
+
+// Resolves whatever's typed to the exact-cased item name, ignoring capitals.
+function resolveItemName(text) {
+  if (!text) return null;
+  text = text.trim();
+  if (itemByName[text]) return text;
+  const lower = text.toLowerCase();
+  return Object.keys(itemByName).find(name => name.toLowerCase() === lower) || null;
+}
+function isTool(entry) {
+  return !!entry && (master && master.toolCategories ? master.toolCategories.includes(entry.category) : TOOL_CATEGORIES.has(entry.category));
+}
+function affixCap(rarity) {
+  return rarity && master && master.rarityAffixCap && master.rarityAffixCap[rarity] !== undefined ? master.rarityAffixCap[rarity] : 4;
+}
+
+let datalistBuilt = false;
+function buildDatalist() {
+  if (datalistBuilt) return;
+  const list = $('modalItemList');
+  // Regular gear (level 1-80) high-to-low first, endgame tiers (85+) at the bottom.
+  const sorted = [...master.items].sort((a, b) => {
+    const aEnd = a.level > 80, bEnd = b.level > 80;
+    if (aEnd !== bEnd) return aEnd ? 1 : -1;
+    return b.level - a.level;
+  });
+  const fragment = document.createDocumentFragment();
+  sorted.forEach(it => {
+    const opt = document.createElement('option');
+    opt.value = it.name;
+    fragment.appendChild(opt);
+  });
+  list.appendChild(fragment);
+  datalistBuilt = true;
+}
+
+function modalIsOpen() { return $('addModalBg').style.display !== 'none'; }
+
+async function openAddModal(restore = null, errorText = '') {
+  hidePopups();
+  try {
+    await loadMaster();
+  } catch (e) {
+    showToast(e.message, true);
+    return false;
+  }
+  buildDatalist();
+  if (!modalIsOpen()) modalPreviouslyFocusedEl = document.activeElement;
+  draft = restore
+    ? { itemName: restore.itemName, rarity: restore.rarity, affixes: new Set(restore.affixes), parsed: restore.parsed, mode: restore.mode }
+    : { itemName: '', rarity: '', affixes: new Set(), parsed: null, mode: 'form' };
+  $('addModalBg').style.display = 'flex';
+  if (draft.mode === 'card' && draft.parsed) renderCard(errorText);
+  else renderForm({ error: errorText });
+  if (!(draft.mode === 'card' && draft.parsed)) $(restore ? 'modalSubmit' : 'modalPasteBox').focus();
+  return true;
+}
+
+function closeAddModal() {
+  $('addModalBg').style.display = 'none';
+  if (modalPreviouslyFocusedEl && document.body.contains(modalPreviouslyFocusedEl)) modalPreviouslyFocusedEl.focus();
+}
+
+function showForm() {
+  document.querySelector('.modal').classList.remove('card-mode');
+  $('defaultUiWrap').style.display = 'block';
+  $('previewCard').style.display = 'none';
+}
+
+// The form shows the draft: item, rarity (always picked on purpose: there's no default, so nothing
+// gets saved as the first rarity by accident) and affix pills.
+function renderForm({ hint = '', rarityMissing = false, error = '' } = {}) {
+  draft.mode = 'form';
+  showForm();
+  $('modalItemInput').value = draft.itemName || '';
+  $('modalPasteBox').value = '';
+  $('pasteHint').textContent = hint;
+  $('pasteHint').style.display = hint ? 'block' : 'none';
+  $('rarityHint').style.display = rarityMissing ? 'block' : 'none';
+  buildRarityOptions();
+  $('modalRarity').classList.toggle('needs-pick', rarityMissing);
+  buildModalAffixes();
+  const errEl = $('modalError');
+  errEl.textContent = error;
+  errEl.style.display = error ? 'block' : 'none';
+  if (rarityMissing) $('modalRarity').focus();
+}
+
+function buildRarityOptions() {
+  const sel = $('modalRarity');
+  const entry = itemByName[resolveItemName($('modalItemInput').value)];
+  // Common only exists for tools: weapons and armour never drop as Common.
+  const options = (master.rarities || []).filter(r => r !== 'Common' || isTool(entry));
+  sel.innerHTML = '';
+  const placeholder = document.createElement('option');
+  placeholder.value = ''; placeholder.textContent = 'Pick a rarity';
+  sel.appendChild(placeholder);
+  options.forEach(r => {
+    const opt = document.createElement('option');
+    opt.value = r; opt.textContent = r;
+    sel.appendChild(opt);
+  });
+  if (!options.includes(draft.rarity)) draft.rarity = '';
+  sel.value = draft.rarity;
+}
+
+function buildModalAffixes() {
+  const wrap = $('modalAffixWrap');
+  const affixEl = $('modalAffixes');
+  affixEl.innerHTML = '';
+  const entry = itemByName[resolveItemName($('modalItemInput').value)];
+  const pool = entry ? ((master.affixPools || {})[entry.category] || []) : [];
+  [...draft.affixes].forEach(a => { if (!pool.includes(a)) draft.affixes.delete(a); });
+  const cap = affixCap(draft.rarity);
+  while (draft.affixes.size > cap) draft.affixes.delete([...draft.affixes].pop());
+  updateSubmitState();
+  if (!entry || pool.length === 0) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  pool.forEach(a => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'pill small';
+    btn.textContent = a;
+    setPressed(btn, draft.affixes.has(a));
+    btn.onclick = () => {
+      if (draft.affixes.has(a)) draft.affixes.delete(a);
+      else if (draft.affixes.size < affixCap(draft.rarity)) draft.affixes.add(a);
+      setPressed(btn, draft.affixes.has(a));
+    };
+    affixEl.appendChild(btn);
+  });
+}
+
+function updateSubmitState() {
+  const text = $('modalItemInput').value;
+  const valid = !!resolveItemName(text);
+  $('modalSubmit').disabled = !valid;
+  // Only nag once they've actually typed something that doesn't match.
+  $('modalItemHint').style.display = (text.trim() && !valid) ? 'block' : 'none';
+}
+
+$('modalItemInput').addEventListener('input', () => {
+  if (!master) return;
+  draft.itemName = $('modalItemInput').value;
+  draft.affixes.clear();
+  buildRarityOptions();
+  buildModalAffixes();
+});
+$('modalRarity').addEventListener('change', () => {
+  draft.rarity = $('modalRarity').value;
+  $('modalRarity').classList.remove('needs-pick');
+  $('rarityHint').style.display = 'none';
+  buildModalAffixes();
+});
+
+function extractStatPairs(rawLines, startIdx, endIdx) {
+  const pairs = [];
+  let i = startIdx;
+  while (i < endIdx) {
+    const line = rawLines[i];
+    // Keeps a percentage attached to its number, so the row lines up.
+    const embedded = line.match(/^(.*?)\s*([+-]?\d+(?:\.\d+)?%?)\s*$/);
+    if (embedded && embedded[1].trim()) {
+      pairs.push({ name: embedded[1].trim(), value: embedded[2] });
+      i++;
+    } else if (i + 1 < endIdx && /^[+-]?\d+(?:\.\d+)?%?$/.test(rawLines[i + 1])) {
+      pairs.push({ name: line, value: rawLines[i + 1] });
+      i += 2;
+    } else {
+      pairs.push({ name: line, value: null });
+      i++;
+    }
+  }
+  return pairs;
+}
+
+// A pasted affix name as the game writes it -> the bot's name for it, or null. The game can say
+// "Health on Critical" where the bot says "Health on Crit"; short names (cdmg) work too.
+function resolvePastedAffix(raw, pool) {
+  const text = raw.trim().toLowerCase().replace(/\s+/g, ' ');
+  const tries = [text, text.replace(/\bcritical$/, 'crit'), text.replace(/^crit\b/, 'critical')];
+  for (const t of tries) {
+    const found = pool.find(a => a.toLowerCase() === t);
+    if (found) return found;
+  }
+  const full = abbreviationFor(text);
+  return full && pool.includes(full) ? full : null;
+}
+
+function parseItemPaste(text) {
+  const rawLines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  if (!rawLines.length) return null;
+
+  const effIdx = rawLines.findIndex(l => /^effects$/i.test(l));
+  const affixIdx = rawLines.findIndex(l => /^affixes$/i.test(l));
+  const compareIdx = rawLines.findIndex(l => /^compare\b/i.test(l));
+  const firstSection = [effIdx, affixIdx, compareIdx].filter(x => x !== -1).reduce((a, b) => Math.min(a, b), rawLines.length);
+
+  // The rarity word sits near the name, above the Effects/Affixes sections (a word in a stat line
+  // further down must not count).
+  let rarity = null;
+  for (const line of rawLines.slice(0, firstSection)) {
+    const found = (master.rarities || []).find(r => new RegExp(`\\b${r}\\b`, 'i').test(line));
+    if (found) { rarity = found; break; }
+  }
+
+  let itemName = null;
+  const candidates = [];
+  for (const line of rawLines.slice(0, Math.min(3, firstSection))) {
+    candidates.push(line);
+    const noLevel = line.replace(/Lv\.?\s*\d+\s*$/i, '').trim();
+    candidates.push(noLevel);
+    const noRarity = noLevel.replace(new RegExp(`^(${(master.rarities || []).join('|')})\\s+`, 'i'), '').trim();
+    candidates.push(noRarity);
+  }
+  for (const c of candidates) {
+    const found = resolveItemName(c);
+    if (found) { itemName = found; break; }
+  }
+
+  let effects = [];
+  if (effIdx !== -1) {
+    const end = [affixIdx, compareIdx].filter(x => x > effIdx).reduce((a, b) => Math.min(a, b), rawLines.length);
+    effects = extractStatPairs(rawLines, effIdx + 1, end);
+  }
+  let affixes = [];
+  if (affixIdx !== -1) {
+    const end = compareIdx > affixIdx ? compareIdx : rawLines.length;
+    affixes = extractStatPairs(rawLines, affixIdx + 1, end);
+  }
+  return { rarity, itemName, affixes, effects };
+}
+
+async function handlePastedStats(text) {
+  try { await loadMaster(); } catch (e) { showToast(e.message, true); return; }
+  const parsed = parseItemPaste(text);
+  if (!parsed) return;
+  if (!parsed.itemName) {
+    draft.itemName = $('modalItemInput').value;
+    renderForm({ hint: "Couldn't find an item name in what you pasted. Pick the item below." });
+    return;
+  }
+  const entry = itemByName[parsed.itemName];
+  const pool = (master.affixPools || {})[entry.category] || [];
+  const rarity = parsed.rarity || (isTool(entry) ? 'Common' : '');  // the game leaves the word out for Common
+  const cap = affixCap(rarity);
+  draft = { itemName: entry.name, rarity, affixes: new Set(), parsed, mode: 'card' };
+  parsed.affixes.forEach(row => {
+    row.match = resolvePastedAffix(row.name, pool);
+    row.saved = !!row.match && !draft.affixes.has(row.match) && draft.affixes.size < cap;
+    if (row.saved) draft.affixes.add(row.match);
+  });
+  if (!rarity) {
+    renderForm({ rarityMissing: true });
+    return;
+  }
+  renderCard();
+}
+
+function renderCard(errorText = '') {
+  const parsed = draft.parsed;
+  const entry = itemByName[draft.itemName];
+  if (!entry) { renderForm(); return; }
+  draft.mode = 'card';
+  $('defaultUiWrap').style.display = 'none';
+  document.querySelector('.modal').classList.add('card-mode');
+  $('previewCard').style.display = 'block';
+  $('modalItemInput').value = entry.name;
+  updateSubmitState();
+
+  const color = rarityColorVar(draft.rarity || 'Common');
+  const icon = $('pcIcon');
+  icon.onerror = function () { this.onerror = null; this.src = PLACEHOLDER_ICON; };
+  icon.src = entry.icon || PLACEHOLDER_ICON;
+  icon.style.borderColor = color;
+  $('pcLv').textContent = `Lv.${entry.level}`;
+  $('pcName').textContent = entry.name;
+  $('pcName').style.color = color;
+  const profession = entry.profession === 'Accessory' ? 'Crafting' : (entry.profession || 'Crafting');
+  $('pcSubtitle').textContent = `${draft.rarity} ${entry.category} · ${profession} Lv. ${entry.level}`;
+  $('pcLevelLabel').textContent = (TOOL_SKILL_LABEL[entry.category] || 'Combat') + ' Level';
+  $('pcLevel').textContent = entry.level;
+  if (entry.classes && entry.classes.length) {
+    $('pcClassRow').style.display = 'flex';
+    $('pcClassText').textContent = abbreviateClasses(entry.classes);
+  } else {
+    $('pcClassRow').style.display = 'none';
+  }
+
+  const fillRows = (el, rows, mark) => {
+    el.innerHTML = '';
+    rows.forEach(p => {
+      const row = document.createElement('div');
+      row.className = 'pc-row' + (mark && !p.saved ? ' unsaved' : '');
+      const val = p.value ? '+' + p.value.replace(/^\+/, '') : '';
+      const name = mark && !p.saved ? `${p.name} (won't be saved)` : p.name;
+      row.innerHTML = `<span>${escapeHtml(name)}</span><span>${escapeHtml(val)}</span>`;
+      el.appendChild(row);
+    });
+  };
+  const effects = (parsed && parsed.effects) || [];
+  const affixRows = (parsed && parsed.affixes) || [];
+  $('pcEffectsSection').style.display = effects.length ? 'block' : 'none';
+  $('pcAffixesSection').style.display = affixRows.length ? 'block' : 'none';
+  fillRows($('pcEffects'), effects, false);
+  fillRows($('pcAffixes'), affixRows, true);
+
+  // The last visible section doesn't draw its own bottom line: the footer's line is the divider.
+  const sections = [$('pcRequirementsSection'), $('pcEffectsSection'), $('pcAffixesSection')].filter(s => s.style.display !== 'none');
+  sections.forEach((s, i) => s.classList.toggle('last', i === sections.length - 1));
+
+  // A small nudge if you've already added exactly this item (same rarity and affixes).
+  const dupe = $('pcDuplicateHint');
+  const target = [...draft.affixes].sort().join('|');
+  const dupes = currentUser ? items.filter(i =>
+    String(i.owner_id) === String(currentUser.id) && i.name === entry.name && i.rarity === draft.rarity &&
+    [...(i.affixes || [])].sort().join('|') === target).length : 0;
+  dupe.textContent = dupes ? `You've already added ${dupes} like this` : '';
+  dupe.style.display = dupes ? 'block' : 'none';
+
+  const err = $('cardError');
+  err.textContent = errorText;
+  err.style.display = errorText ? 'block' : 'none';
+  $('pcBigAddBtn').disabled = false;
+  $('pcBigAddBtn').focus();
+}
+
+$('pcEditBtn').onclick = () => renderForm();
+
+$('modalPasteBox').addEventListener('input', async () => {
+  const box = $('modalPasteBox');
+  const text = box.value;
+  box.value = '';  // a fixed-height box would otherwise show a garbled fragment of the paste
+  await handlePastedStats(text);
+});
+$('modalPasteBox').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    $('modalSubmit').focus();
+  }
+});
+// Pasting anywhere on the page (not into a box) opens the modal and fills it in.
+window.addEventListener('paste', async (e) => {
+  const activeTag = document.activeElement ? document.activeElement.tagName : '';
+  if (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT') return;
+  if (!currentUser || !currentUser.linked) return;
+  const text = (e.clipboardData || window.clipboardData).getData('text');
+  if (!text || !text.trim()) return;
+  e.preventDefault();
+  if (!modalIsOpen() && !(await openAddModal())) return;
+  await handlePastedStats(text);
+});
+
+function getFocusableModalElements() {
+  const all = $('modalContainer').querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+  return [...all].filter(el => el.offsetParent !== null && !el.disabled);
+}
+$('addModalBg').addEventListener('keydown', (e) => {
+  if (e.key !== 'Tab') return;
+  const focusable = getFocusableModalElements();
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+});
+$('modalClose').onclick = closeAddModal;
+$('pcCloseBtn').onclick = closeAddModal;
+$('modalCancel').onclick = closeAddModal;
+$('addModalBg').addEventListener('click', (e) => {
+  if (e.target.id === 'addModalBg') closeAddModal();
+});
+$('addBtn').onclick = async () => {
+  if (!currentUser) { login(); return; }
+  await openAddModal();
+};
+$('pcBigAddBtn').onclick = () => submitFromModal();
+$('modalSubmit').onclick = () => submitFromModal();
+
+function submitFromModal() {
+  // Everything that gets sent is captured now, so a later paste can't change a queued add.
+  const sub = {
+    itemName: resolveItemName($('modalItemInput').value),
+    rarity: draft.rarity,
+    affixes: [...draft.affixes],
+    parsed: draft.parsed,
+    mode: draft.mode,
+  };
+  if (!sub.itemName) {
+    renderForm({ error: 'Pick an item from the list.' });
+    return;
+  }
+  if (!sub.rarity) {
+    draft.itemName = sub.itemName;
+    renderForm({ rarityMissing: true, error: 'Pick a rarity.' });
+    return;
+  }
+  closeAddModal();
+  submitAdd(sub);
+}
+
+// Saved in the background (the modal closes straight away, for quick adding one after another).
+// If it fails, the modal opens again with that item and the reason, so nothing has to be pasted
+// again - unless you're already adding the next one, then a message says which one failed.
+function submitAdd(sub) {
+  enqueueMutation(async () => {
+    try {
+      const data = await apiFetch('/api/items/add', {
+        method: 'POST', auth: true,
+        body: { item: sub.itemName, rarity: sub.rarity, affixes: sub.affixes },
+      });
+      if (!items.some(x => x.id === data.item.id)) items.push(data.item);
+      buildLevels(); render();
+      showToast(`Added ${sub.rarity} ${sub.itemName}${passesFilters(data.item) ? '' : ' (hidden by your filters)'}.`);
+    } catch (err) {
+      if (err.status === 401) { showToast(err.message, true); return; }
+      if (modalIsOpen()) showToast(`Couldn't add ${sub.rarity} ${sub.itemName}: ${err.message}`, true);
+      else openAddModal(sub, err.message);
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------------------------
+// Loading
+// ---------------------------------------------------------------------------------------------
+function showLoading(text, canRetry = false) {
+  $('loading').style.display = 'block';
+  $('loadingText').textContent = text;
+  $('retryBtn').style.display = canRetry ? 'inline' : 'none';
+}
+function hideLoading() { $('loading').style.display = 'none'; }
+
+function applyItemsData(data) {
+  items = Array.isArray(data.items) ? data.items : [];
+  openRequests = Number(data.open_requests) || 0;
+  itemsLoaded = true;
+  itemsLoadedAt = Date.now();
+}
+
+async function loadItems() {
+  // The bot's server can take up to a minute to answer after a restart: say so instead of
+  // showing an endless shimmer.
+  const slow = setTimeout(() => showLoading('Waking up the chest server. This can take up to a minute...'), 3000);
+  try {
+    applyItemsData(await apiFetch('/api/items'));
+    hideLoading();
+  } finally {
+    clearTimeout(slow);
+  }
+}
+
+async function startItems() {
+  if (!itemsLoaded) renderLoadingSkeleton();
+  try {
+    await loadItems();
+  } catch (e) {
+    $('rows').innerHTML = '';
+    showLoading(e.message, true);
+    return;
+  }
+  validateFilterState();
+  rebuildFilterUi();
+  render();
+  renderAuthBox();
+}
+$('retryBtn').onclick = () => { hideLoading(); startItems(); };
+
+// Coming back to the tab after a couple of minutes: fetch the list again, so approvals and other
+// people's new items show without a refresh.
+document.addEventListener('visibilitychange', async () => {
+  if (document.hidden || !itemsLoaded || Date.now() - itemsLoadedAt < 2 * 60 * 1000) return;
+  try {
+    applyItemsData(await apiFetch('/api/items'));
+    buildLevels(); render(); renderAuthBox();
+  } catch {}
+});
+
+const topBtn = $('topBtn');
+window.addEventListener('scroll', () => {
+  topBtn.style.display = window.scrollY > 500 ? 'flex' : 'none';
+});
+topBtn.addEventListener('click', () => {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
 let lastPageSize = getPageSize();
 let resizeRenderTimer = null;
 window.addEventListener('resize', () => {
-  hideTooltip(); hideDeleteConfirm(); hideActionConfirm();
+  hidePopups();
   clearTimeout(resizeRenderTimer);
   resizeRenderTimer = setTimeout(() => {
     const newSize = getPageSize();
@@ -2013,44 +2269,25 @@ window.addEventListener('resize', () => {
   }, 200);
 });
 
-document.addEventListener('click', () => {
-  hideTooltip();
-  hideDeleteConfirm();
-  hideActionConfirm();
-});
-
-const topBtn = document.getElementById('topBtn');
-window.addEventListener('scroll', () => {
-  topBtn.style.display = window.scrollY > 500 ? 'flex' : 'none';
-});
-topBtn.addEventListener('click', () => {
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-});
-
-// A backgrounded tab can be restored from bfcache instantly - a frozen snapshot of this
-// exact page from whenever it was last actually loaded, with zero new network requests.
-// That's what makes an old cached version reappear on tab wake. event.persisted is the
-// browser's own signal that this happened, so force a real reload to get current data.
+// A backgrounded tab can be restored from the browser's back/forward cache as a frozen copy of
+// the page: reload it to get current data.
 window.addEventListener('pageshow', (event) => {
   if (event.persisted) window.location.reload();
 });
 
-(async function init() {
+(function init() {
   handleAuthRedirect();
-  renderLoadingSkeleton();
-  await loadUser();
-  try {
-    const r = await fetch(ITEMS_URL);
-    if (!r.ok) throw new Error('Could not load the chest - try refreshing in a moment.');
-    items = (await r.json()).items;
-    document.getElementById('loading').style.display = 'none';
-    buildClassWrap(); buildToolCatWrap(); buildLevels(); buildAffixes();
-    render();
-  } catch (err) {
-    document.getElementById('rows').innerHTML = '';
-    document.getElementById('loading').style.display = 'block';
-    document.getElementById('loading').textContent = err.message;
-  }
+  validateFilterState();
+  rebuildFilterUi();
+  renderAuthBox();
+  // The list, your login and the item data load side by side (the list used to wait for the login).
+  loadUser();
+  startItems();
+  loadMaster().then(() => {
+    validateFilterState();
+    rebuildFilterUi();
+    if (itemsLoaded) render();
+  }).catch(() => {});  // tried again when the Add box opens
 })();
 </script>
 </body>
